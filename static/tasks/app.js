@@ -184,6 +184,44 @@ document.addEventListener('click', async e => {
   }
 });
 
+/* ── Coller une image depuis le presse-papiers ── */
+document.addEventListener('paste', async e => {
+  const input = document.getElementById('imageUploadInput');
+  if (!input) return; // pas sur une page tâche
+
+  const items = [...(e.clipboardData?.items || [])];
+  const imageItem = items.find(item => item.type.startsWith('image/'));
+  if (!imageItem) return;
+
+  e.preventDefault();
+  const taskId = input.dataset.taskId;
+  const file = imageItem.getAsFile();
+  const ext = file.type.split('/')[1] || 'png';
+  const fname = `capture-${Date.now()}.${ext}`;
+
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', getCsrf());
+  fd.append('image', new File([file], fname, { type: file.type }));
+
+  const res = await fetch(`/task/${taskId}/images/upload/`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!res.ok) { showToast(`Erreur : ${data.error}`); return; }
+
+  const textarea = document.querySelector('textarea[name="description"]');
+  if (e.target === textarea) {
+    // Insérer le lien Markdown à la position du curseur
+    const md = `![${data.filename}](${location.origin}${data.url})`;
+    const s = textarea.selectionStart;
+    textarea.value = textarea.value.slice(0, s) + md + textarea.value.slice(textarea.selectionEnd);
+    textarea.selectionStart = textarea.selectionEnd = s + md.length;
+    showToast('Image insérée dans la description ✓');
+  } else {
+    document.getElementById('noImagesMsg')?.remove();
+    _appendImageCard(data);
+    showToast('Image ajoutée à la galerie ✓');
+  }
+});
+
 /* ── Sidebar toggle (desktop + mobile) ── */
 document.addEventListener('DOMContentLoaded', () => {
   const sidebar   = document.getElementById('sidebar');
