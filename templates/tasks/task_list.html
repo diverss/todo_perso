@@ -1,0 +1,35 @@
+{% for task in tasks %}
+{% if not task.completed and not task.parent_id %}
+<div class="task-item" data-task-id="{{ task.pk }}" data-order="{{ task.order }}">
+  <div class="task-row">
+    <button class="task-complete-btn"
+            data-task-id="{{ task.pk }}"
+            title="Terminer"
+            style="--priority-color:{{ task.priority_color|default:'#555' }}"></button>
+    <a href="{% url 'task_detail' task.pk %}" class="task-title-link">
+      <span class="task-title">{{ task.title }}</span>
+    </a>
+    <div class="task-meta">
+      {% if task.label %}
+      <span class="task-label-badge" style="background:{{ task.label.color }}20; color:{{ task.label.color }}">
+        {{ task.label.name }}
+      </span>
+      {% endif %}
+      {% with sub_count=task.subtasks.count %}
+      {% if sub_count %}
+      <span class="subtask-count" title="{{ sub_count }} sous-tâche{{ sub_count|pluralize }}">
+        &#9633; {{ sub_count }}
+      </span>
+      {% endif %}
+      {% endwith %}
+    </div>
+    <button class="btn-icon task-add-subtask-btn"
+            onclick="openAddTask('{{ task.project.pk }}', '{% if task.section %}{{ task.section.pk }}{% endif %}', '{{ task.pk }}', 'Sous-tâche')"
+            title="Ajouter une sous-tâche">+</button>
+    <span class="drag-handle" title="Déplacer">&#8942;</span>
+  </div>
+</div>
+{% endif %}
+{% empty %}
+<p class="task-list-empty">Aucune tâche — cliquez sur + pour en ajouter une.</p>
+{% endfor %}

@@ -1,0 +1,209 @@
+{% extends 'tasks/base.html' %}
+{% block title %}{{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="task-detail-layout">
+
+  <!-- Back -->
+  <div class="breadcrumb">
+    <a href="{% url 'project' task.project.pk %}">&larr; {{ task.project.name }}</a>
+    {% if task.section %} / {{ task.section.name }}{% endif %}
+    {% if task.parent %} / <a href="{% url 'task_detail' task.parent.pk %}">{{ task.parent.title }}</a>{% endif %}
+  </div>
+
+  <div class="task-detail-card">
+
+    <!-- Complete button + title -->
+    <div class="task-detail-header">
+      <button class="task-complete-btn task-complete-btn-lg"
+              data-task-id="{{ task.pk }}"
+              data-redirect="{% url 'project' task.project.pk %}"
+              style="--priority-color:{{ task.priority_color|default:'#555' }}"
+              title="Terminer la tâche">
+      </button>
+      <h2 class="task-detail-title" id="taskDetailTitle">{{ task.title }}</h2>
+    </div>
+
+    <!-- Edit form -->
+    <form method="post" action="{% url 'task_edit' task.pk %}" id="taskEditForm">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label">Titre</label>
+        <input type="text" name="title" class="form-input" value="{{ task.title }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea name="description" class="form-input form-textarea" rows="4">{{ task.description }}</textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Priorité</label>
+          <select name="priority" class="form-input form-select priority-select">
+            <option value="1" {% if task.priority == 1 %}selected{% endif %}>P1 — Urgent</option>
+            <option value="2" {% if task.priority == 2 %}selected{% endif %}>P2 — Élevée</option>
+            <option value="3" {% if task.priority == 3 %}selected{% endif %}>P3 — Normale</option>
+            <option value="4" {% if task.priority == 4 %}selected{% endif %}>P4 — Aucune</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Étiquette</label>
+          <select name="label_id" class="form-input form-select">
+            <option value="">— Aucune —</option>
+            {% for l in labels %}
+            <option value="{{ l.pk }}" {% if task.label and task.label.pk == l.pk %}selected{% endif %}>
+              {{ l.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Projet</label>
+          <select name="project_id" class="form-input form-select" id="detailProjectSelect"
+                  onchange="loadSections(this.value)">
+            {% for p in projects %}
+            <option value="{{ p.pk }}" {% if task.project.pk == p.pk %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Section</label>
+          <select name="section_id" class="form-input form-select" id="detailSectionSelect">
+            <option value="">— Aucune —</option>
+            {% for s in sections %}
+            <option value="{{ s.pk }}" {% if task.section and task.section.pk == s.pk %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Tâche parente</label>
+        <select name="parent_id" class="form-input form-select">
+          <option value="">— Aucune (tâche principale) —</option>
+          {% for t in task.project.tasks.all %}
+          {% if t.pk != task.pk and not t.completed %}
+          <option value="{{ t.pk }}" {% if task.parent and task.parent.pk == t.pk %}selected{% endif %}>
+            {{ t.title }}
+          </option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <form method="post" action="{% url 'task_delete' task.pk %}"
+              onsubmit="return confirm('Supprimer cette tâche ?')" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">Supprimer</button>
+        </form>
+        {% if task.parent %}
+        <a href="{% url 'task_detail' task.parent.pk %}" class="btn btn-ghost">Annuler</a>
+        {% else %}
+        <a href="{% url 'project' task.project.pk %}" class="btn btn-ghost">Annuler</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Subtasks -->
+  <div class="subtask-section">
+    <div class="subtask-section-header">
+      <h3>Sous-tâches</h3>
+      <button class="btn btn-sm btn-ghost"
+              onclick="openAddTask('{{ task.project.pk }}', '{% if task.section %}{{ task.section.pk }}{% endif %}', '{{ task.pk }}', 'Sous-tâche')">
+        + Ajouter
+      </button>
+    </div>
+
+    <div class="task-list-container" id="subtaskList-{{ task.pk }}"
+         data-project="{{ task.project.pk }}"
+         data-parent="{{ task.pk }}">
+      {% for sub in subtasks %}
+      <div class="task-item task-item-sub" data-task-id="{{ sub.pk }}" data-order="{{ sub.order }}">
+        <div class="task-row">
+          <button class="task-complete-btn"
+                  data-task-id="{{ sub.pk }}"
+                  data-redirect="{{ request.path }}"
+                  style="--priority-color:{{ sub.priority_color|default:'#555' }}"></button>
+          <a href="{% url 'task_detail' sub.pk %}" class="task-title-link">
+            <span class="task-title">{{ sub.title }}</span>
+          </a>
+          {% if sub.label %}
+          <span class="task-label-badge" style="background:{{ sub.label.color }}20; color:{{ sub.label.color }}">
+            {{ sub.label.name }}
+          </span>
+          {% endif %}
+          <span class="drag-handle" title="Déplacer">&#8942;</span>
+        </div>
+      </div>
+      {% empty %}
+      <p class="task-list-empty">Aucune sous-tâche</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Images -->
+  <div class="images-section">
+    <div class="images-section-header">
+      <h3>Images</h3>
+      <label class="btn btn-sm btn-ghost upload-label" title="Ajouter une image">
+        + Image
+        <input type="file" id="imageUploadInput"
+               data-task-id="{{ task.pk }}"
+               accept="image/*,.svg"
+               multiple
+               style="display:none">
+      </label>
+    </div>
+
+    <div class="images-grid" id="imagesGrid">
+      {% for img in task.images.all %}
+      <div class="image-card" id="imgCard-{{ img.pk }}">
+        <a href="{{ img.image.url }}" target="_blank" class="image-thumb-link">
+          <img src="{{ img.image.url }}" alt="{{ img.original_filename }}" class="image-thumb">
+        </a>
+        <div class="image-footer">
+          <span class="image-name" title="{{ img.original_filename }}">{{ img.original_filename }}</span>
+          <div class="image-actions">
+            <button class="btn-icon copy-md-btn"
+                    data-url="{{ img.image.url }}"
+                    data-name="{{ img.original_filename }}"
+                    title="Copier le lien Markdown">&#9113;</button>
+            <button class="btn-icon delete-image-btn"
+                    data-image-id="{{ img.pk }}"
+                    title="Supprimer">&#10005;</button>
+          </div>
+        </div>
+      </div>
+      {% empty %}
+      <p class="task-list-empty" id="noImagesMsg">Aucune image</p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+const DETAIL_PROJECT_ID = {{ task.project.pk }};
+async function loadSections(projectId) {
+  const res = await fetch(`/api/project/${projectId}/sections/`);
+  const data = await res.json();
+  const sel = document.getElementById('detailSectionSelect');
+  sel.innerHTML = '<option value="">— Aucune —</option>';
+  data.sections.forEach(s => {
+    sel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+  });
+}
+</script>
+{% endblock %}

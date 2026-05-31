@@ -1,0 +1,10 @@
+{% extends 'tasks/base.html' %}
+{% block title %}Todo{% endblock %}
+{% block content %}
+<div class="empty-state">
+  <div class="empty-icon">&#10003;</div>
+  <h2>Bienvenue dans Todo</h2>
+  <p>Créez votre premier projet pour commencer.</p>
+  <button class="btn btn-primary" onclick="openModal('modalAddProject')">+ Nouveau projet</button>
+</div>
+{% endblock %}

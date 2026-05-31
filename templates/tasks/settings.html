@@ -1,0 +1,100 @@
+{% extends 'tasks/base.html' %}
+{% block title %}Paramètres{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Paramètres</h1>
+</div>
+
+<div class="settings-card">
+  <h2 class="settings-section-title">Vue par défaut au démarrage</h2>
+  <form method="post" action="{% url 'settings' %}">
+    {% csrf_token %}
+    <div class="form-group">
+      <label class="form-label">Afficher au démarrage</label>
+      <select name="default_view_type" class="form-input form-select" id="settingsViewType"
+              onchange="updateSettingsForm(this.value)">
+        <option value="first_project" {% if settings.default_view_type == 'first_project' %}selected{% endif %}>
+          Premier projet de la liste
+        </option>
+        <option value="project" {% if settings.default_view_type == 'project' %}selected{% endif %}>
+          Projet spécifique
+        </option>
+        <option value="label" {% if settings.default_view_type == 'label' %}selected{% endif %}>
+          Étiquette spécifique
+        </option>
+      </select>
+    </div>
+
+    <div id="settingsProjectRow" class="form-group"
+         style="{% if settings.default_view_type != 'project' %}display:none{% endif %}">
+      <label class="form-label">Projet</label>
+      <select name="default_project_id" class="form-input form-select">
+        <option value="">— Choisir —</option>
+        {% for p in projects %}
+        <option value="{{ p.pk }}"
+                {% if settings.default_project and settings.default_project.pk == p.pk %}selected{% endif %}>
+          {{ p.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div id="settingsLabelRow" class="form-group"
+         style="{% if settings.default_view_type != 'label' %}display:none{% endif %}">
+      <label class="form-label">Étiquette</label>
+      <select name="default_label_id" class="form-input form-select">
+        <option value="">— Choisir —</option>
+        {% for l in labels %}
+        <option value="{{ l.pk }}"
+                {% if settings.default_label and settings.default_label.pk == l.pk %}selected{% endif %}>
+          {{ l.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Enregistrer</button>
+    </div>
+  </form>
+</div>
+
+<div class="settings-card">
+  <h2 class="settings-section-title">Taille du projet</h2>
+  <table class="settings-table">
+    <tr><td>Base de données</td><td><strong>{{ db_size }}</strong></td></tr>
+    <tr><td>Images ({{ image_count }})</td><td><strong>{{ media_size }}</strong></td></tr>
+    <tr class="settings-table-total"><td>Total</td><td><strong>{{ total_size }}</strong></td></tr>
+    <tr><td>Tâches actives</td><td><strong>{{ task_count }}</strong></td></tr>
+    <tr><td>Tâches terminées</td><td><strong>{{ completed_count }}</strong></td></tr>
+  </table>
+</div>
+
+<div class="settings-card settings-card-danger">
+  <h2 class="settings-section-title">Maintenance</h2>
+  <p class="settings-description">
+    Supprime définitivement de la base toutes les tâches marquées comme terminées, ainsi que leurs images associées.
+  </p>
+  <button class="btn btn-danger" id="purgeBtn">Purger les tâches terminées</button>
+  <p id="purgeResult" class="settings-result" style="display:none"></p>
+</div>
+
+<script>
+function updateSettingsForm(val) {
+  document.getElementById('settingsProjectRow').style.display = val === 'project' ? '' : 'none';
+  document.getElementById('settingsLabelRow').style.display  = val === 'label'   ? '' : 'none';
+}
+
+document.getElementById('purgeBtn').addEventListener('click', async () => {
+  if (!confirm('Supprimer définitivement toutes les tâches terminées ?')) return;
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', getCsrf());
+  const res = await fetch('{% url "purge_completed" %}', { method: 'POST', body: fd });
+  const data = await res.json();
+  const el = document.getElementById('purgeResult');
+  el.textContent = `${data.deleted} tâche${data.deleted !== 1 ? 's' : ''} supprimée${data.deleted !== 1 ? 's' : ''}.`;
+  el.style.display = 'block';
+});
+</script>
+{% endblock %}

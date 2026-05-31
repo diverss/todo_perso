@@ -1,0 +1,21 @@
+# Base de données
+db.sqlite3
+
+# Fichiers média uploadés
+media/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.venv/
+venv/
+env/
+
+# Django
+staticfiles/
+*.log
+
+# Système
+.DS_Store
+.env

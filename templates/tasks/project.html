@@ -1,0 +1,238 @@
+{% extends 'tasks/base.html' %}
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <span class="project-dot-lg" style="background:{{ project.color }}"></span>
+    <h1 class="page-title">{{ project.name }}</h1>
+    <div class="dropdown">
+      <button class="btn-icon" id="projectMenuBtn" title="Options">&#8943;</button>
+      <div class="dropdown-menu" id="projectMenu">
+        <button class="dropdown-item" onclick="openEditProject()">Renommer</button>
+        <form method="post" action="{% url 'project_delete' project.pk %}"
+              onsubmit="return confirm('Supprimer ce projet et toutes ses tâches ?')">
+          {% csrf_token %}
+          <button type="submit" class="dropdown-item dropdown-item-danger">Supprimer</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="btn btn-ghost btn-sm" onclick="openAddSection()">+ Section</button>
+    <button class="btn btn-primary btn-sm"
+            onclick="openAddTask('{{ project.pk }}', null, null, 'Nouvelle tâche')">+ Tâche</button>
+  </div>
+</div>
+
+<!-- Edit Project inline form -->
+<div id="editProjectForm" style="display:none" class="edit-inline-form">
+  <form method="post" action="{% url 'project_edit' project.pk %}">
+    {% csrf_token %}
+    <input type="text" name="name" class="form-input" value="{{ project.name }}" required>
+    <div class="color-presets small" style="margin-top:8px">
+      {% for hex in '#5b8def,#db4035,#ff9933,#299438,#a44bb3,#e05194,#ff8d85,#4073ff,#8fbc8f,#795548' %}
+      <span class="color-preset" style="background:{{ hex }}" data-color="{{ hex }}"></span>
+      {% endfor %}
+    </div>
+    <input type="hidden" name="color" id="editProjectColor" value="{{ project.color }}">
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeEditProject()">Annuler</button>
+      <button type="submit" class="btn btn-primary">Enregistrer</button>
+    </div>
+  </form>
+</div>
+
+<!-- Tasks without section (above the board, full width) -->
+{% if tasks_no_section %}
+<div class="no-section-tasks">
+  <div class="task-list-container" id="taskList-null"
+       data-project="{{ project.pk }}" data-section="">
+    {% include 'tasks/task_list.html' with tasks=tasks_no_section %}
+  </div>
+</div>
+{% endif %}
+
+{% if sections %}
+<!-- Section tabs (mobile only) -->
+<div class="section-tabs-mobile" id="sectionTabsMobile">
+  {% for section in sections %}
+  <button class="section-tab {% if forloop.first %}active{% endif %}"
+          data-col="{{ forloop.counter0 }}">{{ section.name }}</button>
+  {% endfor %}
+</div>
+
+<!-- Sections board: horizontal columns -->
+<div class="sections-viewport">
+<div class="sections-board" id="sectionsBoard">
+  {% for section in sections %}
+  <div class="section-col" id="sectionCol-{{ section.pk }}"
+       data-col="{{ forloop.counter0 }}" data-section-id="{{ section.pk }}">
+
+    <div class="section-header">
+      <span class="section-name" id="sectionName-{{ section.pk }}">{{ section.name }}</span>
+      <div class="section-actions">
+        <button class="btn-icon"
+                onclick="openAddTask('{{ project.pk }}', '{{ section.pk }}', null, '{{ section.name|escapejs }}')"
+                title="Ajouter une tâche">+</button>
+        <div class="dropdown">
+          <button class="btn-icon" onclick="toggleDropdown('sectionDrop-{{ section.pk }}')">&#8943;</button>
+          <div class="dropdown-menu" id="sectionDrop-{{ section.pk }}">
+            <button class="dropdown-item"
+                    onclick="moveSectionCol({{ section.pk }}, -1)">&#9664; Déplacer à gauche</button>
+            <button class="dropdown-item"
+                    onclick="moveSectionCol({{ section.pk }}, +1)">&#9654; Déplacer à droite</button>
+            <button class="dropdown-item"
+                    onclick="startEditSection({{ section.pk }}, '{{ section.name|escapejs }}')">Renommer</button>
+            <form method="post" action="{% url 'section_delete' section.pk %}"
+                  onsubmit="return confirm('Supprimer cette section ?')">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item dropdown-item-danger">Supprimer</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inline rename -->
+    <div id="editSection-{{ section.pk }}" style="display:none" class="edit-inline-form" style="margin:8px">
+      <form method="post" action="{% url 'section_edit' section.pk %}">
+        {% csrf_token %}
+        <input type="text" name="name" class="form-input" value="{{ section.name }}" required>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="cancelEditSection({{ section.pk }})">Annuler</button>
+          <button type="submit" class="btn btn-primary btn-sm">OK</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="task-list-container section-tasks" id="taskList-{{ section.pk }}"
+         data-project="{{ project.pk }}" data-section="{{ section.pk }}">
+      {% include 'tasks/task_list.html' with tasks=section.tasks.all section=section %}
+    </div>
+
+  </div>
+  {% endfor %}
+</div><!-- sections-board -->
+</div><!-- sections-viewport -->
+{% endif %}
+
+<!-- Add section inline -->
+<div id="addSectionInline" style="display:none" class="edit-inline-form" style="margin-top:12px">
+  <form method="post" action="{% url 'section_create' project.pk %}">
+    {% csrf_token %}
+    <input type="text" name="name" class="form-input" placeholder="Nom de la section" required>
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost" onclick="closeAddSection()">Annuler</button>
+      <button type="submit" class="btn btn-primary">Créer</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const CURRENT_PROJECT_ID = {{ project.pk }};
+
+function openEditProject() {
+  document.getElementById('editProjectForm').style.display = 'block';
+  closeDropdown('projectMenu');
+}
+function closeEditProject() {
+  document.getElementById('editProjectForm').style.display = 'none';
+}
+function openAddSection() {
+  const f = document.getElementById('addSectionInline');
+  f.style.display = 'block';
+  f.querySelector('input').focus();
+}
+function closeAddSection() {
+  document.getElementById('addSectionInline').style.display = 'none';
+}
+function startEditSection(id, name) {
+  document.getElementById('sectionName-' + id).style.display = 'none';
+  document.getElementById('editSection-' + id).style.display = 'block';
+  closeDropdown('sectionDrop-' + id);
+}
+function cancelEditSection(id) {
+  document.getElementById('sectionName-' + id).style.display = '';
+  document.getElementById('editSection-' + id).style.display = 'none';
+}
+
+// Déplacer une section (◀ ▶)
+function moveSectionCol(sectionId, delta) {
+  const board = document.getElementById('sectionsBoard');
+  const cols = [...board.querySelectorAll('.section-col')];
+  const idx = cols.findIndex(c => parseInt(c.dataset.sectionId) === sectionId);
+  const newIdx = idx + delta;
+  if (newIdx < 0 || newIdx >= cols.length) return;
+  const col = cols[idx];
+  const sibling = cols[newIdx];
+  if (delta > 0) board.insertBefore(sibling, col);
+  else board.insertBefore(col, sibling);
+  // Mise à jour data-col
+  [...board.querySelectorAll('.section-col')].forEach((c, i) => c.dataset.col = i);
+  // Recalibrer le slide (la colonne déplacée peut avoir changé d'index)
+  if (window.innerWidth <= 700) board.style.transform = `translateX(${-Math.min(idx, newIdx) * 100}%)`;
+  // Sauvegarder en BDD
+  const order = [...board.querySelectorAll('.section-col')].map((c, i) => ({
+    id: parseInt(c.dataset.sectionId), order: i
+  }));
+  fetch('/section/reorder/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+    body: JSON.stringify(order),
+  });
+  closeAllDropdowns();
+}
+
+// Sections board : navigation onglets + swipe mobile (1 section à la fois)
+document.addEventListener('DOMContentLoaded', () => {
+  const board = document.getElementById('sectionsBoard');
+  if (!board) return;
+
+  const cols = () => [...board.querySelectorAll('.section-col')];
+  let currentIdx = 0;
+
+  function goTo(idx, animate = true) {
+    const c = cols();
+    if (!c[idx]) return;
+    currentIdx = idx;
+    // Sur mobile : translate le board ; sur desktop : scrollTo classique
+    if (window.innerWidth <= 700) {
+      board.style.transition = animate ? 'transform .3s ease' : 'none';
+      board.style.transform = `translateX(${-idx * 100}%)`;
+    } else {
+      board.scrollTo({ left: c[idx].offsetLeft, behavior: animate ? 'smooth' : 'instant' });
+    }
+    document.querySelectorAll('.section-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+  }
+
+  // Onglets (mobile + desktop)
+  document.querySelectorAll('.section-tab').forEach(tab => {
+    tab.addEventListener('click', () => goTo(parseInt(tab.dataset.col)));
+  });
+
+  // Swipe mobile : exactement ±1 section, quelle que soit la vélocité
+  if (window.innerWidth <= 700) {
+    let startX = 0;
+    const THRESHOLD = 40; // px minimum pour déclencher le slide
+
+    board.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX;
+    }, { passive: true });
+
+    board.addEventListener('touchmove', e => {
+      // Bloquer le scroll natif horizontal — le déplacement est géré au touchend
+      e.preventDefault();
+    }, { passive: false });
+
+    board.addEventListener('touchend', e => {
+      const dx = startX - e.changedTouches[0].clientX;
+      const maxIdx = cols().length - 1;
+      if (dx > THRESHOLD && currentIdx < maxIdx) goTo(currentIdx + 1);
+      else if (dx < -THRESHOLD && currentIdx > 0) goTo(currentIdx - 1);
+      else goTo(currentIdx); // retour en place si swipe trop court
+    }, { passive: true });
+  }
+});
+</script>
+{% endblock %}

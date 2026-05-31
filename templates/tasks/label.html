@@ -1,0 +1,34 @@
+{% extends 'tasks/base.html' %}
+{% block title %}{{ label.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <span class="label-dot-lg" style="background:{{ label.color }}"></span>
+    <h1 class="page-title">{{ label.name }}</h1>
+  </div>
+</div>
+
+<div class="label-tasks-list">
+  {% for task in tasks %}
+  <div class="task-item" data-task-id="{{ task.pk }}">
+    <div class="task-row">
+      <button class="task-complete-btn"
+              data-task-id="{{ task.pk }}"
+              data-redirect="{{ request.path }}"
+              style="--priority-color:{{ task.priority_color|default:'#555' }}"
+              title="Terminer"></button>
+      <div class="task-title-link">
+        <span class="task-title">{{ task.title }}</span>
+        <div class="task-location">
+          <span class="project-dot" style="background:{{ task.project.color }}"></span>
+          <span class="task-location-text">{{ task.project.name }}{% if task.section %} / {{ task.section.name }}{% endif %}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <p class="task-list-empty">Aucune tâche avec cette étiquette.</p>
+  {% endfor %}
+</div>
+{% endblock %}

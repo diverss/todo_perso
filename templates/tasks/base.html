@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Todo{% endblock %}</title>
+  {% load static %}
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23db4035'/><text x='50' y='78' font-size='68' text-anchor='middle' fill='white' font-family='sans-serif'>✓</text></svg>">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#111111">
+  <link rel="stylesheet" href="{% static 'tasks/style.css' %}">
+</head>
+<body>
+
+<!-- Bannière hors-ligne (visible automatiquement via pwa.js) -->
+<div class="offline-banner" id="offlineBanner">
+  <div class="offline-banner-left">
+    <span>&#128233; Hors connexion</span>
+    <span class="pending-badge" id="pendingBadge"></span>
+  </div>
+  <button class="sync-now-btn" id="syncNowBtn">&#8635; Synchroniser</button>
+</div>
+
+<div class="app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="app-logo">&#10003; Todo</span>
+      <button class="btn-icon sidebar-toggle" id="sidebarToggle" title="Masquer le menu">&#9776;</button>
+    </div>
+
+    <nav class="sidebar-nav">
+
+      <!-- Projects -->
+      <div class="nav-section">
+        <div class="nav-section-header">
+          <span>Projets</span>
+          <button class="btn-icon" id="addProjectBtn" title="Ajouter un projet">+</button>
+        </div>
+        <div id="projectNavList">
+        {% for p in projects %}
+        <a href="{% url 'project' p.pk %}"
+           class="nav-item {% if request.resolver_match.kwargs.project_id == p.pk %}active{% endif %}"
+           data-id="{{ p.pk }}">
+          <span class="nav-drag-handle"></span>
+          <span class="project-dot" style="background:{{ p.color }}"></span>
+          <span class="nav-item-name">{{ p.name }}</span>
+        </a>
+        {% empty %}
+        <p class="nav-empty">Aucun projet</p>
+        {% endfor %}
+        </div>
+      </div>
+
+      <!-- Labels -->
+      <div class="nav-section">
+        <div class="nav-section-header">
+          <span>Étiquettes</span>
+          <button class="btn-icon" id="addLabelBtn" title="Ajouter une étiquette">+</button>
+        </div>
+        <div id="labelNavList">
+        {% for l in labels %}
+        <a href="{% url 'label' l.pk %}"
+           class="nav-item {% if request.resolver_match.kwargs.label_id == l.pk %}active{% endif %}"
+           data-id="{{ l.pk }}">
+          <span class="nav-drag-handle"></span>
+          <span class="label-dot" style="background:{{ l.color }}"></span>
+          <span class="nav-item-name">{{ l.name }}</span>
+          <button class="btn-icon label-action-btn"
+                  data-label-id="{{ l.pk }}"
+                  data-label-name="{{ l.name }}"
+                  data-label-color="{{ l.color }}"
+                  onclick="openEditLabel(event, this)">&#8943;</button>
+        </a>
+        {% endfor %}
+        </div>
+      </div>
+
+    </nav>
+
+    <!-- Sidebar footer -->
+    <div class="sidebar-footer">
+      <a href="{% url 'settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
+        <span class="nav-icon">&#9881;</span>
+        <span class="nav-item-name">Paramètres</span>
+      </a>
+      <a href="{% url 'logout' %}" class="nav-item nav-item-logout">
+        <span class="nav-icon">&#10008;</span>
+        <span class="nav-item-name">Déconnexion</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Button to re-show sidebar (desktop, visible when collapsed) -->
+  <button class="sidebar-show-btn" id="sidebarShowBtn" title="Afficher le menu">&#9776;</button>
+
+  <!-- Main -->
+  <main class="main-content">
+    <!-- Mobile top bar -->
+    <div class="mobile-topbar">
+      <button class="btn-icon mobile-menu-btn" id="mobileMenuBtn" title="Menu">&#9776;</button>
+      <span class="app-logo-mobile">&#10003; Todo</span>
+    </div>
+
+    {% block content %}{% endblock %}
+  </main>
+
+</div>
+
+<!-- Mobile sidebar backdrop -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<!-- Modal: Add Project -->
+<div class="modal-overlay" id="modalAddProject">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nouveau projet</h3>
+      <button class="btn-icon modal-close" data-modal="modalAddProject">&times;</button>
+    </div>
+    <form method="post" action="{% url 'project_create' %}">
+      {% csrf_token %}
+      <div class="form-group">
+        <label>Nom</label>
+        <input type="text" name="name" class="form-input" placeholder="Nom du projet" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Couleur</label>
+        <div class="color-presets">
+          {% for hex in '#5b8def,#db4035,#ff9933,#299438,#a44bb3,#e05194,#ff8d85,#4073ff,#8fbc8f,#795548' %}
+          <span class="color-preset" style="background:{{ hex }}" data-color="{{ hex }}"></span>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="color" id="projectColorInput" value="#5b8def">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost modal-close" data-modal="modalAddProject">Annuler</button>
+        <button type="submit" class="btn btn-primary">Créer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Add Label -->
+<div class="modal-overlay" id="modalAddLabel">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nouvelle étiquette</h3>
+      <button class="btn-icon modal-close" data-modal="modalAddLabel">&times;</button>
+    </div>
+    <form id="formAddLabel">
+      {% csrf_token %}
+      <div class="form-group">
+        <label>Nom</label>
+        <input type="text" name="name" class="form-input" placeholder="Nom de l'étiquette" required>
+      </div>
+      <div class="form-group">
+        <label>Couleur</label>
+        <div class="color-presets" id="labelColorPresets">
+          {% for hex in '#6c757d,#db4035,#ff9933,#299438,#a44bb3,#e05194,#4073ff,#5b8def,#ff8d85,#795548' %}
+          <span class="color-preset" style="background:{{ hex }}" data-color="{{ hex }}"></span>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="color" id="labelColorInput" value="#6c757d">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost modal-close" data-modal="modalAddLabel">Annuler</button>
+        <button type="submit" class="btn btn-primary">Créer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Edit Label -->
+<div class="modal-overlay" id="modalEditLabel">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Modifier l'étiquette</h3>
+      <button class="btn-icon modal-close" data-modal="modalEditLabel">&times;</button>
+    </div>
+    <form id="formEditLabel">
+      {% csrf_token %}
+      <input type="hidden" id="editLabelId">
+      <div class="form-group">
+        <label>Nom</label>
+        <input type="text" id="editLabelName" class="form-input" required>
+      </div>
+      <div class="form-group">
+        <label>Couleur</label>
+        <div class="color-presets" id="editLabelColorPresets">
+          {% for hex in '#6c757d,#db4035,#ff9933,#299438,#a44bb3,#e05194,#4073ff,#5b8def,#ff8d85,#795548' %}
+          <span class="color-preset" style="background:{{ hex }}" data-color="{{ hex }}"></span>
+          {% endfor %}
+        </div>
+        <input type="hidden" id="editLabelColor" value="#6c757d">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-danger" id="deleteLabelBtn">Supprimer</button>
+        <button type="button" class="btn btn-ghost modal-close" data-modal="modalEditLabel">Annuler</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Add Task -->
+<div class="modal-overlay" id="modalAddTask">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h3 id="modalAddTaskTitle">Nouvelle tâche</h3>
+      <button class="btn-icon modal-close" data-modal="modalAddTask">&times;</button>
+    </div>
+    <form method="post" action="{% url 'task_create' %}" id="formAddTask">
+      {% csrf_token %}
+      <input type="hidden" name="project_id" id="addTaskProjectId">
+      <input type="hidden" name="section_id" id="addTaskSectionId">
+      <input type="hidden" name="parent_id" id="addTaskParentId">
+      <div class="form-group">
+        <input type="text" name="title" class="form-input form-input-title" placeholder="Titre de la tâche" required autofocus>
+      </div>
+      <div class="form-group">
+        <textarea name="description" class="form-input form-textarea" placeholder="Description (optionnel)" rows="3"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priorité</label>
+          <select name="priority" class="form-input form-select">
+            <option value="1">&#9679; P1 — Urgent</option>
+            <option value="2">&#9679; P2 — Élevée</option>
+            <option value="3">&#9679; P3 — Normale</option>
+            <option value="4" selected>P4 — Aucune</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Étiquette</label>
+          <select name="label_id" class="form-input form-select">
+            <option value="">— Aucune —</option>
+            {% for l in labels %}
+            <option value="{{ l.pk }}">{{ l.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost modal-close" data-modal="modalAddTask">Annuler</button>
+        <button type="submit" class="btn btn-primary">Ajouter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% load static %}
+<script src="{% static 'tasks/pwa.js' %}"></script>
+<script src="{% static 'tasks/app.js' %}"></script>
+
+</body>
+</html>
