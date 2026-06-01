@@ -9,7 +9,7 @@
   </div>
 </div>
 
-<div class="label-tasks-list">
+<div class="label-tasks-list" id="labelTaskList" data-label-id="{{ label.pk }}">
   {% for task in tasks %}
   <div class="task-item" data-task-id="{{ task.pk }}">
     <div class="task-row">
@@ -19,16 +19,43 @@
               style="--priority-color:{{ task.priority_color|default:'#555' }}"
               title="Terminer"></button>
       <div class="task-title-link">
-        <span class="task-title">{{ task.title }}</span>
+        <a href="{% url 'task_detail' task.pk %}">
+          <span class="task-title">{{ task.title }}</span>
+        </a>
         <div class="task-location">
           <span class="project-dot" style="background:{{ task.project.color }}"></span>
           <span class="task-location-text">{{ task.project.name }}{% if task.section %} / {{ task.section.name }}{% endif %}</span>
         </div>
       </div>
+      <span class="drag-handle" title="Déplacer">&#8942;</span>
     </div>
   </div>
   {% empty %}
   <p class="task-list-empty">Aucune tâche avec cette étiquette.</p>
   {% endfor %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const list = document.getElementById('labelTaskList');
+  if (!list || typeof Sortable === 'undefined') return;
+  Sortable.create(list, {
+    animation: 150,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    dragClass: 'sortable-drag',
+    onEnd: () => {
+      const labelId = list.dataset.labelId;
+      const items = [...list.querySelectorAll('.task-item')].map((el, i) => ({
+        id: parseInt(el.dataset.taskId), order: i,
+      }));
+      fetch(`/label/${labelId}/tasks/reorder/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify(items),
+      });
+    },
+  });
+});
+</script>
 {% endblock %}

@@ -45,10 +45,13 @@ def index(request):
 
 
 def label_view(request, label_id):
+    from django.db.models import F
     label = get_object_or_404(Label, pk=label_id)
     tasks = Task.objects.filter(
         label=label, completed=False, parent__isnull=True
-    ).select_related('project', 'section')
+    ).select_related('project', 'section').order_by(
+        F('label_order').asc(nulls_last=True), 'order', 'created_at'
+    )
     ctx = _sidebar_context()
     ctx.update({'label': label, 'tasks': tasks})
     return render(request, 'tasks/label.html', ctx)
@@ -147,7 +150,10 @@ def task_create(request):
         return JsonResponse({'id': task.pk, 'title': task.title})
 
     if parent:
-        return redirect('project', project_id=project.pk)
+        return redirect('task_detail', task_id=parent.pk)
+    if section:
+        from django.urls import reverse
+        return redirect(reverse('project', args=[project.pk]) + f'?section={section.pk}')
     return redirect('project', project_id=project.pk)
 
 
@@ -353,6 +359,13 @@ def _media_size():
                 if os.path.isfile(fp):
                     total += os.path.getsize(fp)
     return total
+
+
+@require_POST
+def label_task_reorder(request, label_id):
+    for item in json.loads(request.body):
+        Task.objects.filter(pk=item['id']).update(label_order=item['order'])
+    return JsonResponse({'status': 'ok'})
 
 
 @require_POST

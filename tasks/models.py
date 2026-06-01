@@ -55,6 +55,7 @@ class Task(models.Model):
     section = models.ForeignKey(Section, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     order = models.PositiveIntegerField(default=0)
+    label_order = models.PositiveIntegerField(null=True, blank=True)
     completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

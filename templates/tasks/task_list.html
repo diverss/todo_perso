@@ -6,15 +6,19 @@
             data-task-id="{{ task.pk }}"
             title="Terminer"
             style="--priority-color:{{ task.priority_color|default:'#555' }}"></button>
-    <a href="{% url 'task_detail' task.pk %}" class="task-title-link">
-      <span class="task-title">{{ task.title }}</span>
-    </a>
-    <div class="task-meta">
+    <div class="task-title-link">
+      <a href="{% url 'task_detail' task.pk %}">
+        <span class="task-title">{{ task.title }}</span>
+      </a>
       {% if task.label %}
-      <span class="task-label-badge" style="background:{{ task.label.color }}20; color:{{ task.label.color }}">
-        {{ task.label.name }}
-      </span>
+      <div>
+        <span class="task-label-badge" style="background:{{ task.label.color }}20; color:{{ task.label.color }}">
+          {{ task.label.name }}
+        </span>
+      </div>
       {% endif %}
+    </div>
+    <div class="task-meta">
       {% with sub_count=task.subtasks.count %}
       {% if sub_count %}
       <span class="subtask-count" title="{{ sub_count }} sous-tâche{{ sub_count|pluralize }}">

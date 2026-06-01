@@ -117,16 +117,25 @@
 </div><!-- sections-viewport -->
 {% endif %}
 
-<!-- Add section inline -->
-<div id="addSectionInline" style="display:none" class="edit-inline-form" style="margin-top:12px">
-  <form method="post" action="{% url 'section_create' project.pk %}">
-    {% csrf_token %}
-    <input type="text" name="name" class="form-input" placeholder="Nom de la section" required>
-    <div class="form-actions">
-      <button type="button" class="btn btn-ghost" onclick="closeAddSection()">Annuler</button>
-      <button type="submit" class="btn btn-primary">Créer</button>
+<!-- Modal: Nouvelle section -->
+<div class="modal-overlay" id="modalAddSection">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nouvelle section</h3>
+      <button class="btn-icon modal-close" data-modal="modalAddSection">&times;</button>
     </div>
-  </form>
+    <form method="post" action="{% url 'section_create' project.pk %}">
+      {% csrf_token %}
+      <div class="form-group">
+        <input type="text" name="name" class="form-input form-input-title"
+               placeholder="Nom de la section" required autofocus id="sectionNameInput">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost modal-close" data-modal="modalAddSection">Annuler</button>
+        <button type="submit" class="btn btn-primary">Créer</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <script>
@@ -140,12 +149,8 @@ function closeEditProject() {
   document.getElementById('editProjectForm').style.display = 'none';
 }
 function openAddSection() {
-  const f = document.getElementById('addSectionInline');
-  f.style.display = 'block';
-  f.querySelector('input').focus();
-}
-function closeAddSection() {
-  document.getElementById('addSectionInline').style.display = 'none';
+  openModal('modalAddSection');
+  setTimeout(() => document.getElementById('sectionNameInput')?.focus(), 50);
 }
 function startEditSection(id, name) {
   document.getElementById('sectionName-' + id).style.display = 'none';
@@ -210,6 +215,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.section-tab').forEach(tab => {
     tab.addEventListener('click', () => goTo(parseInt(tab.dataset.col)));
   });
+
+  // Restaurer la section après création d'une tâche (?section=ID)
+  const targetSectionId = new URLSearchParams(location.search).get('section');
+  if (targetSectionId) {
+    const allCols = cols();
+    const idx = allCols.findIndex(c => c.dataset.sectionId === targetSectionId);
+    if (idx >= 0) goTo(idx, false);
+    history.replaceState(null, '', location.pathname); // nettoyer l'URL
+  }
 
   // Swipe mobile : exactement ±1 section, quelle que soit la vélocité
   if (window.innerWidth <= 700) {

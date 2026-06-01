@@ -384,6 +384,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   border-radius: 10px;
   font-weight: 500;
   white-space: nowrap;
+  display: inline-block;
+  margin-top: 3px;
 }
 .task-project-badge {
   display: flex;

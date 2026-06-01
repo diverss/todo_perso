@@ -38,6 +38,7 @@ urlpatterns = [
     path('task/images/<int:image_id>/delete/', views.task_image_delete, name='task_image_delete'),
 
     # Reorder
+    path('label/<int:label_id>/tasks/reorder/', views.label_task_reorder, name='label_task_reorder'),
     path('project/reorder/', views.project_reorder, name='project_reorder'),
     path('label/reorder/', views.label_reorder, name='label_reorder'),
     path('section/reorder/', views.section_reorder, name='section_reorder'),
