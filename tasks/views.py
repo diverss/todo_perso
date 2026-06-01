@@ -160,12 +160,16 @@ def task_create(request):
 def task_detail(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
     subtasks = task.subtasks.filter(completed=False)
+    back_url = request.GET.get('back', '')
+    if not back_url.startswith('/'):
+        back_url = ''
     ctx = _sidebar_context()
     ctx.update({
         'task': task,
         'subtasks': subtasks,
         'projects': Project.objects.all(),
         'sections': Section.objects.filter(project=task.project),
+        'back_url': back_url,
     })
     return render(request, 'tasks/task_detail.html', ctx)
 
@@ -191,6 +195,9 @@ def task_edit(request, task_id):
     task.parent = get_object_or_404(Task, pk=parent_id) if parent_id else None
 
     task.save()
+    back = request.POST.get('back', '')
+    if back and back.startswith('/'):
+        return redirect(back)
     if task.parent_id:
         return redirect('task_detail', task_id=task.parent_id)
     return redirect('project', project_id=task.project_id)
@@ -211,7 +218,10 @@ def task_delete(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
     project_id = task.project.pk
     parent_id = task.parent.pk if task.parent else None
+    back = request.POST.get('back', '')
     task.delete()
+    if back and back.startswith('/'):
+        return redirect(back)
     if parent_id:
         return redirect('task_detail', task_id=parent_id)
     return redirect('project', project_id=project_id)

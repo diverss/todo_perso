@@ -310,6 +310,29 @@ function _initSidebarSortable() {
   });
 }
 
+/* ── Tri vue étiquette ── */
+function _initLabelSortable() {
+  const list = document.getElementById('labelTaskList');
+  if (!list) return;
+  const labelId = list.dataset.labelId;
+  Sortable.create(list, {
+    animation: 150,
+    handle: '.drag-handle',
+    ghostClass: 'sortable-ghost',
+    dragClass: 'sortable-drag',
+    onEnd: () => {
+      const items = [...list.querySelectorAll('.task-item')].map((el, i) => ({
+        id: parseInt(el.dataset.taskId), order: i,
+      }));
+      fetch(`/label/${labelId}/tasks/reorder/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify(items),
+      });
+    },
+  });
+}
+
 /* ── Images ── */
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('imageUploadInput');
@@ -376,6 +399,6 @@ document.addEventListener('click', async e => {
 (function loadSortable() {
   const script = document.createElement('script');
   script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js';
-  script.onload = () => { initSortable(); _initSidebarSortable(); };
+  script.onload = () => { initSortable(); _initSidebarSortable(); _initLabelSortable(); };
   document.head.appendChild(script);
 })();

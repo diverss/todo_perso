@@ -19,7 +19,7 @@
               style="--priority-color:{{ task.priority_color|default:'#555' }}"
               title="Terminer"></button>
       <div class="task-title-link">
-        <a href="{% url 'task_detail' task.pk %}">
+        <a href="{% url 'task_detail' task.pk %}?back={% url 'label' label.pk %}">
           <span class="task-title">{{ task.title }}</span>
         </a>
         <div class="task-location">
@@ -35,27 +35,4 @@
   {% endfor %}
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const list = document.getElementById('labelTaskList');
-  if (!list || typeof Sortable === 'undefined') return;
-  Sortable.create(list, {
-    animation: 150,
-    handle: '.drag-handle',
-    ghostClass: 'sortable-ghost',
-    dragClass: 'sortable-drag',
-    onEnd: () => {
-      const labelId = list.dataset.labelId;
-      const items = [...list.querySelectorAll('.task-item')].map((el, i) => ({
-        id: parseInt(el.dataset.taskId), order: i,
-      }));
-      fetch(`/label/${labelId}/tasks/reorder/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-        body: JSON.stringify(items),
-      });
-    },
-  });
-});
-</script>
 {% endblock %}

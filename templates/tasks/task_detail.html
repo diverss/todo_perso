@@ -27,6 +27,7 @@
     <!-- Edit form -->
     <form method="post" action="{% url 'task_edit' task.pk %}" id="taskEditForm">
       {% csrf_token %}
+      <input type="hidden" name="back" value="{{ back_url }}">
 
       <div class="form-group">
         <label class="form-label">Titre</label>
@@ -104,9 +105,12 @@
         <form method="post" action="{% url 'task_delete' task.pk %}"
               onsubmit="return confirm('Supprimer cette tâche ?')" style="display:inline">
           {% csrf_token %}
+          <input type="hidden" name="back" value="{{ back_url }}">
           <button type="submit" class="btn btn-danger">Supprimer</button>
         </form>
-        {% if task.parent %}
+        {% if back_url %}
+        <a href="{{ back_url }}" class="btn btn-ghost">Annuler</a>
+        {% elif task.parent %}
         <a href="{% url 'task_detail' task.parent.pk %}" class="btn btn-ghost">Annuler</a>
         {% else %}
         <a href="{% url 'project' task.project.pk %}" class="btn btn-ghost">Annuler</a>
