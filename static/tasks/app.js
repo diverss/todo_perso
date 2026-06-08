@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('addProjectBtn')?.addEventListener('click', () => openModal('modalAddProject'));
   bindColorPresets('modalAddProject', 'projectColorInput');
+  bindColorPresets('editProjectForm', 'editProjectColor');
 });
 
 /* ── Add Label modal ── */
@@ -416,6 +417,8 @@ function _initLabelSortable() {
     handle: '.drag-handle',
     ghostClass: 'sortable-ghost',
     dragClass: 'sortable-drag',
+    delay: 150,
+    delayOnTouchOnly: true,
     onEnd: () => {
       const items = [...list.querySelectorAll('.task-item')].map((el, i) => ({
         id: parseInt(el.dataset.taskId), order: i,
