@@ -2,16 +2,29 @@
   "name": "Todo Perso",
   "short_name": "Todo",
   "description": "Gestionnaire de tâches personnel",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1f1f1f",
   "theme_color": "#111111",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23db4035'/><text x='50' y='78' font-size='68' text-anchor='middle' fill='white' font-family='sans-serif'>✓</text></svg>",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/static/tasks/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/tasks/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/tasks/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
