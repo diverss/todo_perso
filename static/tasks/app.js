@@ -143,6 +143,7 @@ function openAddTask(projectId, sectionId, parentId, titleHint) {
   document.getElementById('addTaskSectionId').value = sectionId || '';
   document.getElementById('addTaskParentId').value = parentId || '';
   if (titleHint) document.getElementById('modalAddTaskTitle').textContent = titleHint;
+  _clearPendingImages();
   openModal('modalAddTask');
   setTimeout(() => document.querySelector('#formAddTask input[name="title"]')?.focus(), 50);
 }
@@ -184,21 +185,117 @@ document.addEventListener('click', async e => {
   }
 });
 
+/* ── Images en attente (modale création de tâche) ── */
+let _pendingImages = [];
+
+function _addPendingImage(file) {
+  _pendingImages.push(file);
+  _renderPendingImages();
+}
+
+function _removePendingImage(idx) {
+  _pendingImages.splice(idx, 1);
+  _renderPendingImages();
+}
+
+function _clearPendingImages() {
+  _pendingImages = [];
+  _renderPendingImages();
+}
+
+function _renderPendingImages() {
+  const grid = document.getElementById('pendingImagesGrid');
+  const hint = document.getElementById('pendingImagesHint');
+  if (!grid) return;
+  grid.innerHTML = '';
+  if (_pendingImages.length === 0) {
+    grid.style.display = 'none';
+    if (hint) hint.style.display = '';
+    return;
+  }
+  grid.style.display = '';
+  if (hint) hint.style.display = 'none';
+  _pendingImages.forEach((file, idx) => {
+    const url = URL.createObjectURL(file);
+    const d = document.createElement('div');
+    d.className = 'image-card';
+    d.innerHTML = `
+      <a href="${url}" target="_blank" class="image-thumb-link">
+        <img src="${url}" alt="${file.name}" class="image-thumb">
+      </a>
+      <div class="image-footer">
+        <span class="image-name" title="${file.name}">${file.name}</span>
+        <div class="image-actions">
+          <button class="btn-icon pending-img-remove" data-idx="${idx}" title="Retirer">&#10005;</button>
+        </div>
+      </div>`;
+    grid.appendChild(d);
+  });
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.pending-img-remove');
+  if (!btn) return;
+  _removePendingImage(parseInt(btn.dataset.idx));
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('addTaskImageInput')?.addEventListener('change', e => {
+    [...e.target.files].forEach(_addPendingImage);
+    e.target.value = '';
+  });
+
+  document.getElementById('formAddTask')?.addEventListener('submit', async e => {
+    if (_pendingImages.length === 0) return; // submit classique
+    e.preventDefault();
+    const form = e.target;
+    const fd = new FormData(form);
+    const res = await fetch(form.action, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: fd,
+    });
+    if (!res.ok) { showToast('Erreur lors de la création de la tâche'); return; }
+    const task = await res.json();
+    for (const file of _pendingImages) {
+      const ifd = new FormData();
+      ifd.append('csrfmiddlewaretoken', getCsrf());
+      ifd.append('image', file);
+      await fetch(`/task/${task.id}/images/upload/`, { method: 'POST', body: ifd });
+    }
+    const projectId = document.getElementById('addTaskProjectId').value;
+    const sectionId = document.getElementById('addTaskSectionId').value;
+    const parentId  = document.getElementById('addTaskParentId').value;
+    if (parentId)      location.href = `/task/${parentId}/`;
+    else if (sectionId) location.href = `/project/${projectId}/?section=${sectionId}`;
+    else               location.href = `/project/${projectId}/`;
+  });
+});
+
 /* ── Coller une image depuis le presse-papiers ── */
 document.addEventListener('paste', async e => {
-  const input = document.getElementById('imageUploadInput');
-  if (!input) return; // pas sur une page tâche
+  const taskDetailInput = document.getElementById('imageUploadInput');
+  const modalOpen = document.getElementById('modalAddTask')?.classList.contains('open');
+
+  if (!taskDetailInput && !modalOpen) return;
 
   const items = [...(e.clipboardData?.items || [])];
   const imageItem = items.find(item => item.type.startsWith('image/'));
   if (!imageItem) return;
 
   e.preventDefault();
-  const taskId = input.dataset.taskId;
   const file = imageItem.getAsFile();
   const ext = file.type.split('/')[1] || 'png';
   const fname = `capture-${Date.now()}.${ext}`;
 
+  if (modalOpen) {
+    _addPendingImage(new File([file], fname, { type: file.type }));
+    showToast('Image ajoutée ✓');
+    return;
+  }
+
+  // Page task_detail : upload direct
+  const taskId = taskDetailInput.dataset.taskId;
   const fd = new FormData();
   fd.append('csrfmiddlewaretoken', getCsrf());
   fd.append('image', new File([file], fname, { type: file.type }));
@@ -209,7 +306,6 @@ document.addEventListener('paste', async e => {
 
   const textarea = document.querySelector('textarea[name="description"]');
   if (e.target === textarea) {
-    // Insérer le lien Markdown à la position du curseur
     const md = `![${data.filename}](${location.origin}${data.url})`;
     const s = textarea.selectionStart;
     textarea.value = textarea.value.slice(0, s) + md + textarea.value.slice(textarea.selectionEnd);

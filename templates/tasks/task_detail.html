@@ -102,12 +102,7 @@
       </div>
 
       <div class="form-actions">
-        <form method="post" action="{% url 'task_delete' task.pk %}"
-              onsubmit="return confirm('Supprimer cette tâche ?')" style="display:inline">
-          {% csrf_token %}
-          <input type="hidden" name="back" value="{{ back_url }}">
-          <button type="submit" class="btn btn-danger">Supprimer</button>
-        </form>
+        <button type="submit" form="deleteTaskForm" class="btn btn-danger">Supprimer</button>
         {% if back_url %}
         <a href="{{ back_url }}" class="btn btn-ghost">Annuler</a>
         {% elif task.parent %}
@@ -117,6 +112,12 @@
         {% endif %}
         <button type="submit" class="btn btn-primary">Enregistrer</button>
       </div>
+    </form>
+
+    <form method="post" action="{% url 'task_delete' task.pk %}" id="deleteTaskForm"
+          onsubmit="return confirm('Supprimer cette tâche ?')">
+      {% csrf_token %}
+      <input type="hidden" name="back" value="{{ back_url }}">
     </form>
   </div>
 

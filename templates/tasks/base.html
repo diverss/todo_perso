@@ -241,6 +241,19 @@
           </select>
         </div>
       </div>
+      <div class="form-group">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <label class="form-label" style="margin:0">Images</label>
+          <label class="btn btn-sm btn-ghost" style="cursor:pointer;font-weight:normal">
+            + Fichier
+            <input type="file" id="addTaskImageInput" accept="image/*,.svg" multiple style="display:none">
+          </label>
+        </div>
+        <div id="pendingImagesGrid" class="images-grid" style="display:none"></div>
+        <p id="pendingImagesHint" style="font-size:.8rem;color:var(--text-muted);margin:4px 0 0">
+          Coller une image avec Ctrl+V
+        </p>
+      </div>
       <div class="form-actions">
         <button type="button" class="btn btn-ghost modal-close" data-modal="modalAddTask">Annuler</button>
         <button type="submit" class="btn btn-primary">Ajouter</button>
