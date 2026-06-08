@@ -22,6 +22,12 @@
         <a href="{% url 'task_detail' task.pk %}?back={% url 'label' label.pk %}">
           <span class="task-title">{{ task.title }}</span>
         </a>
+        {% if task.description or task.images.exists %}
+        <div class="task-hints">
+          {% if task.description %}<span>description</span>{% endif %}
+          {% if task.images.exists %}<span>image</span>{% endif %}
+        </div>
+        {% endif %}
         <div class="task-location">
           <span class="project-dot" style="background:{{ task.project.color }}"></span>
           <span class="task-location-text">{{ task.project.name }}{% if task.section %} / {{ task.section.name }}{% endif %}</span>

@@ -10,6 +10,12 @@
       <a href="{% url 'task_detail' task.pk %}">
         <span class="task-title">{{ task.title }}</span>
       </a>
+      {% if task.description or task.images.exists %}
+      <div class="task-hints">
+        {% if task.description %}<span>description</span>{% endif %}
+        {% if task.images.exists %}<span>image</span>{% endif %}
+      </div>
+      {% endif %}
       {% if task.label %}
       <div>
         <span class="task-label-badge" style="background:{{ task.label.color }}20; color:{{ task.label.color }}">
