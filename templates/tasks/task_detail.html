@@ -17,7 +17,7 @@
     <div class="task-detail-header">
       <button class="task-complete-btn task-complete-btn-lg"
               data-task-id="{{ task.pk }}"
-              data-redirect="{% url 'project' task.project.pk %}"
+              data-redirect="{% if back_url %}{{ back_url }}{% else %}{% url 'project' task.project.pk %}{% endif %}"
               style="--priority-color:{{ task.priority_color|default:'#555' }}"
               title="Terminer la tâche">
       </button>

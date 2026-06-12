@@ -7,7 +7,7 @@
             title="Terminer"
             style="--priority-color:{{ task.priority_color|default:'#555' }}"></button>
     <div class="task-title-link">
-      <a href="{% url 'task_detail' task.pk %}">
+      <a href="{% url 'task_detail' task.pk %}?back={% url 'project' task.project.pk %}{% if task.section %}%3Fsection={{ task.section.pk }}{% endif %}">
         <span class="task-title">{{ task.title }}</span>
       </a>
       {% if task.description or task.images.exists %}
