@@ -18,6 +18,7 @@ class Project(models.Model):
     name = models.CharField(max_length=200)
     color = models.CharField(max_length=7, default='#5b8def')
     order = models.PositiveIntegerField(default=0)
+    is_inbox = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

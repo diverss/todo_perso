@@ -10,10 +10,21 @@ from django.conf import settings as django_settings
 from .models import Project, Section, Task, Label, AppSettings, TaskImage
 
 
+def _get_inbox():
+    inbox, _ = Project.objects.get_or_create(
+        is_inbox=True,
+        defaults={'name': 'A trier', 'color': '#718096', 'order': 9999}
+    )
+    return inbox
+
+
 def _sidebar_context():
+    inbox = _get_inbox()
     return {
-        'projects': Project.objects.all(),
+        'projects': Project.objects.filter(is_inbox=False),
         'labels': Label.objects.all(),
+        'inbox': inbox,
+        'inbox_task_count': Task.objects.filter(project=inbox, completed=False, parent__isnull=True).count(),
     }
 
 
@@ -38,10 +49,20 @@ def index(request):
         return redirect('project', project_id=s.default_project_id)
     if s.default_view_type == AppSettings.VIEW_LABEL and s.default_label_id:
         return redirect('label', label_id=s.default_label_id)
-    first_project = Project.objects.first()
+    first_project = Project.objects.filter(is_inbox=False).first()
     if first_project:
         return redirect('project', project_id=first_project.pk)
     return render(request, 'tasks/empty.html', _sidebar_context())
+
+
+def inbox_view(request):
+    inbox = _get_inbox()
+    tasks = Task.objects.filter(
+        project=inbox, completed=False, parent__isnull=True
+    ).order_by('order', 'created_at')
+    ctx = _sidebar_context()
+    ctx.update({'inbox': inbox, 'tasks': tasks})
+    return render(request, 'tasks/inbox.html', ctx)
 
 
 def label_view(request, label_id):
@@ -81,6 +102,8 @@ def project_edit(request, project_id):
 @require_POST
 def project_delete(request, project_id):
     project = get_object_or_404(Project, pk=project_id)
+    if project.is_inbox:
+        return redirect('inbox')
     project.delete()
     return redirect('index')
 
@@ -154,6 +177,8 @@ def task_create(request):
     if section:
         from django.urls import reverse
         return redirect(reverse('project', args=[project.pk]) + f'?section={section.pk}')
+    if project.is_inbox:
+        return redirect('inbox')
     return redirect('project', project_id=project.pk)
 
 
@@ -167,7 +192,7 @@ def task_detail(request, task_id):
     ctx.update({
         'task': task,
         'subtasks': subtasks,
-        'projects': Project.objects.all(),
+        'projects': Project.objects.filter(is_inbox=False),
         'sections': Section.objects.filter(project=task.project),
         'back_url': back_url,
     })

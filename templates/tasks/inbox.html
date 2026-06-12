@@ -1,0 +1,47 @@
+{% extends 'tasks/base.html' %}
+{% block title %}A trier{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">A trier</h1>
+  </div>
+  <button class="btn btn-primary btn-sm"
+          onclick="openAddTask('{{ inbox.pk }}', null, null, 'A trier')">+ Tâche</button>
+</div>
+
+<div class="label-tasks-list" id="inboxTaskList">
+  {% for task in tasks %}
+  <div class="task-item" data-task-id="{{ task.pk }}">
+    <div class="task-row">
+      <button class="task-complete-btn"
+              data-task-id="{{ task.pk }}"
+              data-redirect="{% url 'inbox' %}"
+              style="--priority-color:{{ task.priority_color|default:'#555' }}"
+              title="Terminer"></button>
+      <div class="task-title-link">
+        <a href="{% url 'task_detail' task.pk %}?back={% url 'inbox' %}">
+          <span class="task-title">{{ task.title }}</span>
+        </a>
+        {% if task.description or task.images.exists %}
+        <div class="task-hints">
+          {% if task.description %}<span>description</span>{% endif %}
+          {% if task.images.exists %}<span>image</span>{% endif %}
+        </div>
+        {% endif %}
+        {% if task.label %}
+        <div>
+          <span class="task-label-badge" style="background:{{ task.label.color }}20; color:{{ task.label.color }}">
+            {{ task.label.name }}
+          </span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <p class="task-list-empty">Aucune tâche à trier.</p>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -105,6 +105,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .nav-drag-handle::after  { left: 6px; }
 .nav-item:hover .nav-drag-handle { opacity: 0.8; }
 .nav-item-ghost { opacity: 0.4; background: var(--bg3); border-radius: var(--radius); }
+.nav-separator { height: 1px; background: var(--border); margin: 8px 12px; }
+.inbox-count { font-size: .7rem; background: var(--text-muted); color: var(--sidebar-bg); border-radius: 10px; padding: 1px 6px; }
 
 .project-dot, .label-dot {
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;

@@ -27,7 +27,12 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <span class="app-logo">&#10003; Todo</span>
-      <button class="btn-icon sidebar-toggle" id="sidebarToggle" title="Masquer le menu">&#9776;</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-primary btn-sm"
+                onclick="openAddTask('{{ inbox.pk }}', null, null, 'A trier')"
+                title="Ajouter à A trier">+ A trier</button>
+        <button class="btn-icon sidebar-toggle" id="sidebarToggle" title="Masquer le menu">&#9776;</button>
+      </div>
     </div>
 
     <nav class="sidebar-nav">
@@ -76,6 +81,15 @@
         {% endfor %}
         </div>
       </div>
+
+      <!-- Inbox -->
+      <div class="nav-separator"></div>
+      <a href="{% url 'inbox' %}"
+         class="nav-item {% if request.resolver_match.url_name == 'inbox' %}active{% endif %}">
+        <span style="font-size:14px;color:var(--text-muted)">&#9993;</span>
+        <span class="nav-item-name">A trier</span>
+        {% if inbox_task_count %}<span class="inbox-count">{{ inbox_task_count }}</span>{% endif %}
+      </a>
 
     </nav>
 
