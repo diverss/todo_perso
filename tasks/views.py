@@ -39,6 +39,7 @@ def project_view(request, project_id):
         'project': project,
         'sections': sections,
         'tasks_no_section': tasks_no_section,
+        'all_projects': Project.objects.filter(is_inbox=False),
     })
     return render(request, 'tasks/project.html', ctx)
 
@@ -123,6 +124,13 @@ def section_create(request, project_id):
 @require_POST
 def section_edit(request, section_id):
     section = get_object_or_404(Section, pk=section_id)
+    if request.POST.get('move_to_project'):
+        origin_project_id = section.project_id
+        new_project = get_object_or_404(Project, pk=request.POST.get('project_id'))
+        section.project = new_project
+        section.order = new_project.sections.count()
+        section.save()
+        return redirect('project', project_id=origin_project_id)
     section.name = request.POST.get('name', section.name).strip()
     section.save()
     return redirect('project', project_id=section.project.pk)
@@ -188,6 +196,17 @@ def task_detail(request, task_id):
     back_url = request.GET.get('back', '')
     if not back_url.startswith('/'):
         back_url = ''
+    if not back_url and task.project.is_inbox and task.parent is None:
+        ids = list(
+            Task.objects.filter(project=task.project, completed=False, parent__isnull=True)
+            .order_by('order', 'created_at')
+            .values_list('pk', flat=True)
+        )
+        try:
+            idx = ids.index(task.pk)
+            back_url = f'/task/{ids[idx + 1]}/' if idx + 1 < len(ids) else '/inbox/'
+        except ValueError:
+            back_url = '/inbox/'
     ctx = _sidebar_context()
     ctx.update({
         'task': task,
@@ -195,6 +214,14 @@ def task_detail(request, task_id):
         'projects': Project.objects.filter(is_inbox=False),
         'sections': Section.objects.filter(project=task.project),
         'back_url': back_url,
+        'task_export_data': {
+            'id': task.pk,
+            'title': task.title,
+            'description': task.description,
+            'images': [{'url': img.image.url, 'name': img.original_filename} for img in task.images.all()],
+            'back_url': back_url,
+            'project_url': f'/project/{task.project.pk}/',
+        },
     })
     return render(request, 'tasks/task_detail.html', ctx)
 

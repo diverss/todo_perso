@@ -139,15 +139,40 @@ function bindColorPresets(modalId, inputId) {
 }
 
 /* ── Add Task modal ── */
+async function _loadSectionsIntoModal(projectId, preselectSectionId) {
+  const sel = document.getElementById('addTaskSectionSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Aucune —</option>';
+  if (!projectId) return;
+  try {
+    const res = await fetch(`/api/project/${projectId}/sections/`);
+    const data = await res.json();
+    for (const s of data.sections) {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      if (String(s.id) === String(preselectSectionId)) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  } catch (_) {}
+}
+
 function openAddTask(projectId, sectionId, parentId, titleHint) {
-  document.getElementById('addTaskProjectId').value = projectId || '';
-  document.getElementById('addTaskSectionId').value = sectionId || '';
+  const projSel = document.getElementById('addTaskProjectSelect');
+  if (projSel && projectId) projSel.value = projectId;
   document.getElementById('addTaskParentId').value = parentId || '';
   if (titleHint) document.getElementById('modalAddTaskTitle').textContent = titleHint;
   _clearPendingImages();
+  _loadSectionsIntoModal(projectId, sectionId);
   openModal('modalAddTask');
   setTimeout(() => document.querySelector('#formAddTask input[name="title"]')?.focus(), 50);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('addTaskProjectSelect')?.addEventListener('change', e => {
+    _loadSectionsIntoModal(e.target.value, null);
+  });
+});
 
 /* ── Complete task ── */
 document.addEventListener('click', async e => {
@@ -264,8 +289,8 @@ document.addEventListener('DOMContentLoaded', () => {
       ifd.append('image', file);
       await fetch(`/task/${task.id}/images/upload/`, { method: 'POST', body: ifd });
     }
-    const projectId = document.getElementById('addTaskProjectId').value;
-    const sectionId = document.getElementById('addTaskSectionId').value;
+    const projectId = document.getElementById('addTaskProjectSelect')?.value;
+    const sectionId = document.getElementById('addTaskSectionSelect')?.value;
     const parentId  = document.getElementById('addTaskParentId').value;
     if (parentId)      location.href = `/task/${parentId}/`;
     else if (sectionId) location.href = `/project/${projectId}/?section=${sectionId}`;
@@ -273,7 +298,48 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-/* ── Coller une image depuis le presse-papiers ── */
+/* ── Coller une image via le bouton (mobile) ── */
+async function pasteImageFromClipboard(context) {
+  if (!navigator.clipboard?.read) {
+    showToast('Coller non supporté sur ce navigateur');
+    return;
+  }
+  let items;
+  try {
+    items = await navigator.clipboard.read();
+  } catch (err) {
+    showToast(err.name === 'NotAllowedError' ? 'Permission refusée — autorisez le presse-papier' : 'Erreur presse-papier');
+    return;
+  }
+  for (const item of items) {
+    const imageType = item.types.find(t => t.startsWith('image/'));
+    if (!imageType) continue;
+    const blob = await item.getType(imageType);
+    const ext = imageType.split('/')[1] || 'png';
+    const fname = `capture-${Date.now()}.${ext}`;
+    const file = new File([blob], fname, { type: imageType });
+    if (context === 'modal') {
+      _addPendingImage(file);
+      showToast('Image ajoutée ✓');
+    } else {
+      const taskId = document.getElementById('imageUploadInput')?.dataset.taskId;
+      if (!taskId) return;
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', getCsrf());
+      fd.append('image', file);
+      const res = await fetch(`/task/${taskId}/images/upload/`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(`Erreur : ${data.error}`); return; }
+      document.getElementById('noImagesMsg')?.remove();
+      _appendImageCard(data);
+      showToast('Image collée ✓');
+    }
+    return;
+  }
+  showToast('Aucune image dans le presse-papier');
+}
+
+/* ── Coller une image depuis le presse-papiers (Ctrl+V desktop) ── */
 document.addEventListener('paste', async e => {
   const taskDetailInput = document.getElementById('imageUploadInput');
   const modalOpen = document.getElementById('modalAddTask')?.classList.contains('open');
@@ -501,3 +567,159 @@ document.addEventListener('click', async e => {
   script.onload = () => { initSortable(); _initSidebarSortable(); _initLabelSortable(); };
   document.head.appendChild(script);
 })();
+
+/* ════════════════════════════════════════════
+ *  Export Obsidian
+ * ════════════════════════════════════════════ */
+
+const _OBS_IDB = 'todo-obsidian';
+const _OBS_STORE = 'files';
+
+function _openObsidianDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(_OBS_IDB, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(_OBS_STORE, { keyPath: 'id', autoIncrement: true });
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _obsSaveHandle(handle) {
+  const db = await _openObsidianDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(_OBS_STORE, 'readwrite');
+    const store = tx.objectStore(_OBS_STORE);
+    store.getAll().onsuccess = e => {
+      const existing = e.target.result.find(r => r.name === handle.name);
+      if (existing) store.put({ id: existing.id, name: handle.name, handle, lastUsed: Date.now() });
+      else store.add({ name: handle.name, handle, lastUsed: Date.now() });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+async function _obsLoadHandles() {
+  const db = await _openObsidianDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(_OBS_STORE, 'readonly').objectStore(_OBS_STORE).getAll();
+    req.onsuccess = e => resolve(e.target.result.sort((a, b) => b.lastUsed - a.lastUsed));
+    req.onerror = () => reject(req.error);
+  });
+}
+
+let _obsHandle = null;
+let _obsEntries = {};
+
+async function openExportObsidian() {
+  _obsHandle = null;
+  _obsEntries = {};
+  document.getElementById('obsidianExportBtn').disabled = true;
+  document.getElementById('obsidianChosenFile').textContent = '';
+
+  const recentSection = document.getElementById('obsidianRecentSection');
+  const list = document.getElementById('obsidianFileList');
+  list.innerHTML = '';
+
+  try {
+    const entries = await _obsLoadHandles();
+    if (entries.length > 0) {
+      entries.forEach(entry => {
+        _obsEntries[entry.id] = entry;
+        const d = document.createElement('div');
+        d.className = 'obsidian-file-item';
+        d.innerHTML = `<span class="obsidian-file-name">&#128196; ${entry.name}</span>
+          <button class="btn btn-sm btn-ghost" data-obs-id="${entry.id}">Utiliser</button>`;
+        list.appendChild(d);
+      });
+      recentSection.style.display = '';
+    } else {
+      recentSection.style.display = 'none';
+    }
+  } catch (_) {
+    recentSection.style.display = 'none';
+  }
+
+  openModal('modalExportObsidian');
+}
+
+document.addEventListener('click', async e => {
+  const btn = e.target.closest('[data-obs-id]');
+  if (!btn) return;
+  const entry = _obsEntries[parseInt(btn.dataset.obsId)];
+  if (!entry?.handle) return;
+  try {
+    const perm = await entry.handle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') { showToast('Permission refusée'); return; }
+    _obsHandle = entry.handle;
+    document.getElementById('obsidianChosenFile').textContent = entry.name;
+    document.getElementById('obsidianExportBtn').disabled = false;
+  } catch (err) {
+    showToast('Erreur : ' + err.message);
+  }
+});
+
+async function pickObsidianFile() {
+  if (!window.showOpenFilePicker) {
+    showToast('Nécessite Chrome ou Edge (bureau)');
+    return;
+  }
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'Markdown', accept: { 'text/plain': ['.md'] } }],
+    });
+    await _obsSaveHandle(handle);
+    _obsHandle = handle;
+    document.getElementById('obsidianChosenFile').textContent = handle.name;
+    document.getElementById('obsidianExportBtn').disabled = false;
+    // Rafraîchir la liste
+    const entries = await _obsLoadHandles();
+    const list = document.getElementById('obsidianFileList');
+    list.innerHTML = '';
+    _obsEntries = {};
+    entries.forEach(entry => {
+      _obsEntries[entry.id] = entry;
+      const d = document.createElement('div');
+      d.className = 'obsidian-file-item';
+      d.innerHTML = `<span class="obsidian-file-name">&#128196; ${entry.name}</span>
+        <button class="btn btn-sm btn-ghost" data-obs-id="${entry.id}">Utiliser</button>`;
+      list.appendChild(d);
+    });
+    document.getElementById('obsidianRecentSection').style.display = '';
+  } catch (err) {
+    if (err.name !== 'AbortError') showToast('Erreur : ' + err.message);
+  }
+}
+
+async function confirmExportObsidian() {
+  if (!_obsHandle) return;
+  const task = JSON.parse(document.getElementById('obsidian-task-data').textContent);
+
+  const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  let block = `\n## ${task.title}\n_${dateStr}_\n`;
+  if (task.description.trim()) block += `\n${task.description}\n`;
+  for (const img of task.images) {
+    block += `\n![${img.name}](${location.origin}${img.url})\n`;
+  }
+  block += '\n---\n';
+
+  try {
+    const file = await _obsHandle.getFile();
+    const lines = (await file.text()).split('\n');
+    lines.splice(0, 0, block);
+    const writable = await _obsHandle.createWritable();
+    await writable.write(lines.join('\n'));
+    await writable.close();
+  } catch (err) {
+    showToast('Erreur écriture : ' + err.message);
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', getCsrf());
+  await fetch(`/task/${task.id}/complete/`, { method: 'POST', body: fd });
+
+  closeModal('modalExportObsidian');
+  showToast('Exporté et tâche terminée ✓');
+  setTimeout(() => { location.href = task.back_url || task.project_url; }, 800);
+}

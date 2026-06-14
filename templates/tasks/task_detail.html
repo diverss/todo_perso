@@ -103,6 +103,7 @@
 
       <div class="form-actions">
         <button type="submit" form="deleteTaskForm" class="btn btn-danger">Supprimer</button>
+        <button type="button" class="btn btn-ghost desktop-only" onclick="openExportObsidian()" style="border:1.5px solid #7c3aed;color:#7c3aed">Exporter vers Obsidian</button>
         {% if back_url %}
         <a href="{{ back_url }}" class="btn btn-ghost">Annuler</a>
         {% elif task.parent %}
@@ -170,6 +171,7 @@
                multiple
                style="display:none">
       </label>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="pasteImageFromClipboard('detail')" title="Coller une image depuis le presse-papier">&#128203; Coller</button>
     </div>
 
     <div class="images-grid" id="imagesGrid">
@@ -198,6 +200,30 @@
   </div>
 
 </div>
+
+<!-- Modal: Export Obsidian -->
+<div class="modal-overlay" id="modalExportObsidian">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Exporter vers Obsidian</h3>
+      <button class="btn-icon modal-close" data-modal="modalExportObsidian">&times;</button>
+    </div>
+    <div id="obsidianRecentSection" style="display:none">
+      <label class="form-label">Fichiers récents</label>
+      <div id="obsidianFileList" class="obsidian-file-list"></div>
+    </div>
+    <div style="margin:4px 0 16px">
+      <button type="button" class="btn btn-ghost" onclick="pickObsidianFile()">&#128194; Choisir un fichier .md…</button>
+      <span id="obsidianChosenFile" style="margin-left:8px;font-size:.85rem;color:var(--text-muted)"></span>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-ghost modal-close" data-modal="modalExportObsidian">Annuler</button>
+      <button type="button" class="btn btn-primary" id="obsidianExportBtn" disabled onclick="confirmExportObsidian()">Exporter et terminer</button>
+    </div>
+  </div>
+</div>
+
+{{ task_export_data|json_script:"obsidian-task-data" }}
 
 <script>
 const DETAIL_PROJECT_ID = {{ task.project.pk }};

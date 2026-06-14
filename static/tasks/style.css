@@ -505,6 +505,10 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
   animation: slideUp .15s ease;
 }
 .modal-large { max-width: 560px; }
+@media (max-width: 700px) {
+  .modal-overlay { align-items: flex-start; padding: 8px 8px 0; }
+  .modal { border-radius: 10px 10px 0 0; max-height: 92dvh; overflow-y: auto; }
+}
 @keyframes slideUp {
   from { transform: translateY(16px); opacity: 0; }
   to   { transform: translateY(0); opacity: 1; }
@@ -744,3 +748,11 @@ body.is-offline .app-layout { margin-top: 36px; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
+
+/* ── Utilitaires responsive ── */
+@media (max-width: 700px) { .desktop-only { display: none !important; } }
+
+/* ── Export Obsidian ── */
+.obsidian-file-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 12px; }
+.obsidian-file-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--bg3); border-radius: 6px; }
+.obsidian-file-name { font-size: .85rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

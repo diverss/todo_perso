@@ -237,18 +237,33 @@
   <div class="modal modal-large">
     <div class="modal-header">
       <h3 id="modalAddTaskTitle">Nouvelle tâche</h3>
-      <button class="btn-icon modal-close" data-modal="modalAddTask">&times;</button>
+      <button type="submit" form="formAddTask" class="btn btn-primary btn-sm">Ajouter</button>
     </div>
     <form method="post" action="{% url 'task_create' %}" id="formAddTask">
       {% csrf_token %}
-      <input type="hidden" name="project_id" id="addTaskProjectId">
-      <input type="hidden" name="section_id" id="addTaskSectionId">
       <input type="hidden" name="parent_id" id="addTaskParentId">
       <div class="form-group">
         <input type="text" name="title" class="form-input form-input-title" placeholder="Titre de la tâche" required autofocus>
       </div>
       <div class="form-group">
         <textarea name="description" class="form-input form-textarea" placeholder="Description (optionnel)" rows="3"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Projet</label>
+          <select name="project_id" id="addTaskProjectSelect" class="form-input form-select">
+            <option value="{{ inbox.pk }}">{{ inbox.name }}</option>
+            {% for p in projects %}
+            <option value="{{ p.pk }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Section</label>
+          <select name="section_id" id="addTaskSectionSelect" class="form-input form-select">
+            <option value="">— Aucune —</option>
+          </select>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -277,6 +292,7 @@
             + Fichier
             <input type="file" id="addTaskImageInput" accept="image/*,.svg" multiple style="display:none">
           </label>
+          <button type="button" class="btn btn-sm btn-ghost" onclick="pasteImageFromClipboard('modal')" title="Coller une image depuis le presse-papier">&#128203; Coller</button>
         </div>
         <div id="pendingImagesGrid" class="images-grid" style="display:none"></div>
         <p id="pendingImagesHint" style="font-size:.8rem;color:var(--text-muted);margin:4px 0 0">

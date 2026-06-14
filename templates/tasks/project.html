@@ -89,6 +89,8 @@
                     onclick="moveSectionCol({{ section.pk }}, +1)">&#9654; Déplacer à droite</button>
             <button class="dropdown-item"
                     onclick="startEditSection({{ section.pk }}, '{{ section.name|escapejs }}')">Renommer</button>
+            <button class="dropdown-item"
+                    onclick="openMoveSection({{ section.pk }}, '{{ section.name|escapejs }}')">Déplacer vers…</button>
             <form method="post" action="{% url 'section_delete' section.pk %}"
                   onsubmit="return confirm('Supprimer cette section ?')">
               {% csrf_token %}
@@ -143,6 +145,32 @@
   </div>
 </div>
 
+<!-- Modal: Déplacer section -->
+<div class="modal-overlay" id="modalMoveSection">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Déplacer la section</h3>
+      <button class="btn-icon modal-close" data-modal="modalMoveSection">&times;</button>
+    </div>
+    <form method="post" id="formMoveSection">
+      {% csrf_token %}
+      <input type="hidden" name="move_to_project" value="1">
+      <div class="form-group">
+        <label>Vers le projet</label>
+        <select name="project_id" id="moveSectionProjectSelect" class="form-input form-select">
+          {% for p in all_projects %}
+          <option value="{{ p.pk }}"{% if p.pk == project.pk %} disabled{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost modal-close" data-modal="modalMoveSection">Annuler</button>
+        <button type="submit" class="btn btn-primary">Déplacer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 const CURRENT_PROJECT_ID = {{ project.pk }};
 
@@ -170,6 +198,12 @@ function startEditSection(id, name) {
 function cancelEditSection(id) {
   document.getElementById('sectionName-' + id).style.display = '';
   document.getElementById('editSection-' + id).style.display = 'none';
+}
+function openMoveSection(sectionId, sectionName) {
+  const form = document.getElementById('formMoveSection');
+  form.action = `/section/${sectionId}/edit/`;
+  closeDropdown('sectionDrop-' + sectionId);
+  openModal('modalMoveSection');
 }
 
 // Déplacer une section (◀ ▶)

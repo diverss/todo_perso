@@ -49,9 +49,12 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       caches.match(req).then(cached => {
         const network = fetch(req).then(res => {
-          if (res.ok) caches.open(CACHE).then(c => c.put(req, res.clone()));
+          if (res.ok) {
+            const clone = res.clone(); // cloner immédiatement, avant toute consommation du body
+            caches.open(CACHE).then(c => c.put(req, clone));
+          }
           return res;
-        }).catch(() => cached); // réseau impossible → cached
+        }).catch(() => cached);
         return cached || network;
       })
     );
@@ -60,8 +63,10 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       fetch(req)
         .then(res => {
-          // Mettre en cache seulement les réponses complètes (pas les redirects opaques)
-          if (res.ok) caches.open(CACHE).then(c => c.put(req, res.clone()));
+          if (res.ok) {
+            const clone = res.clone(); // cloner immédiatement, avant toute consommation du body
+            caches.open(CACHE).then(c => c.put(req, clone));
+          }
           return res;
         })
         .catch(() => caches.match(req))
