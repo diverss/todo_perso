@@ -6,6 +6,7 @@
  *  3. Intercepter les soumissions de formulaires quand hors-ligne
  *  4. Rejouer la file à la reconnexion
  *  5. Toasts + bannière hors-ligne
+ *  6. Détecter les changements serveur et recharger l'app
  *
  * API publique utilisée par app.js :
  *   getCsrf()                           → token CSRF cookie
@@ -143,6 +144,43 @@ function _updateBanner() {
 }
 
 /* ════════════════════════════════════════════
+ *  Détection des changements serveur
+ * ════════════════════════════════════════════ */
+const APP_REVISION_URL = '/api/app-revision/';
+const APP_REVISION_POLL_MS = 10000;
+let _appRevision = null;
+let _checkingAppRevision = false;
+
+async function checkAppRevision() {
+  if (!navigator.onLine || document.hidden || _checkingAppRevision) return;
+  if (!(await window.isOfflineQueueEmpty())) return;
+
+  _checkingAppRevision = true;
+  try {
+    const res = await fetch(APP_REVISION_URL, { cache: 'no-store' });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (!data.revision) return;
+
+    if (_appRevision === null) {
+      _appRevision = data.revision;
+      return;
+    }
+
+    if (data.revision !== _appRevision) {
+      _appRevision = data.revision;
+      showToast('Données modifiées ailleurs — rechargement…', 3000);
+      setTimeout(() => location.reload(), 600);
+    }
+  } catch (_) {
+    // La prochaine sonde retentera silencieusement.
+  } finally {
+    _checkingAppRevision = false;
+  }
+}
+
+/* ════════════════════════════════════════════
  *  Synchronisation
  * ════════════════════════════════════════════ */
 async function syncPending() {
@@ -244,6 +282,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Bouton "Synchroniser maintenant" (affiché quand ops en attente + en ligne)
   document.getElementById('syncNowBtn')?.addEventListener('click', syncPending);
+
+  checkAppRevision();
+  setInterval(checkAppRevision, APP_REVISION_POLL_MS);
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) checkAppRevision();
 });
 
 /* ════════════════════════════════════════════

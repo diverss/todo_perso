@@ -16,6 +16,7 @@ urlpatterns = [
     path('project/<int:project_id>/section/create/', views.section_create, name='section_create'),
     path('section/<int:section_id>/edit/', views.section_edit, name='section_edit'),
     path('section/<int:section_id>/delete/', views.section_delete, name='section_delete'),
+    path('section/<int:section_id>/favorite/', views.section_toggle_favorite, name='section_toggle_favorite'),
 
     # Tasks
     path('task/create/', views.task_create, name='task_create'),
@@ -33,6 +34,7 @@ urlpatterns = [
     # API helpers
     path('api/project/<int:project_id>/sections/', views.get_sections_for_project, name='api_sections'),
     path('api/project/<int:project_id>/tasks/', views.get_tasks_for_parent, name='api_tasks'),
+    path('api/app-revision/', views.app_revision, name='app_revision'),
 
     # Images
     path('task/<int:task_id>/images/upload/', views.task_image_upload, name='task_image_upload'),
@@ -43,6 +45,7 @@ urlpatterns = [
     path('project/reorder/', views.project_reorder, name='project_reorder'),
     path('label/reorder/', views.label_reorder, name='label_reorder'),
     path('section/reorder/', views.section_reorder, name='section_reorder'),
+    path('section/favorites/reorder/', views.section_favorite_reorder, name='section_favorite_reorder'),
 
     # Settings & maintenance
     path('settings/', views.settings_view, name='settings'),

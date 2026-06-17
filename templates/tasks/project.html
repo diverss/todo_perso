@@ -89,6 +89,13 @@
                     onclick="moveSectionCol({{ section.pk }}, +1)">&#9654; Déplacer à droite</button>
             <button class="dropdown-item"
                     onclick="startEditSection({{ section.pk }}, '{{ section.name|escapejs }}')">Renommer</button>
+            <form method="post" action="{% url 'section_toggle_favorite' section.pk %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button type="submit" class="dropdown-item">
+                {% if section.is_favorite %}Retirer des favoris{% else %}Ajouter aux favoris{% endif %}
+              </button>
+            </form>
             <button class="dropdown-item"
                     onclick="openMoveSection({{ section.pk }}, '{{ section.name|escapejs }}')">Déplacer vers…</button>
             <form method="post" action="{% url 'section_delete' section.pk %}"

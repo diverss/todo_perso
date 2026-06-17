@@ -6,7 +6,7 @@
  *   - POST                → laissé passer (géré par pwa.js côté client)
  */
 
-const CACHE = 'todo-v2';
+const CACHE = 'todo-v4';
 
 // Pré-cache minimal (shell de l'app)
 const PRECACHE = [
@@ -42,7 +42,13 @@ self.addEventListener('fetch', e => {
   // On ne touche pas aux extensions, chrome-extension, etc.
   if (!req.url.startsWith(self.location.origin)) return;
 
-  const isStatic = req.url.includes('/static/');
+  const url = new URL(req.url);
+  if (url.pathname === '/api/app-revision/') {
+    e.respondWith(fetch(req));
+    return;
+  }
+
+  const isStatic = url.pathname.startsWith('/static/');
 
   if (isStatic) {
     // Cache-first + mise à jour silencieuse

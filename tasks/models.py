@@ -32,6 +32,8 @@ class Section(models.Model):
     name = models.CharField(max_length=200)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sections')
     order = models.PositiveIntegerField(default=0)
+    is_favorite = models.BooleanField(default=False)
+    favorite_order = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['order', 'name']

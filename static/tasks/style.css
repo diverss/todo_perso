@@ -74,6 +74,15 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .nav-item.active { background: var(--bg3); font-weight: 500; }
 .nav-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-empty { padding: 6px 8px; color: var(--text-muted); font-size: 12px; }
+.favorite-star { color: #f5c542; font-size: 13px; line-height: 1; flex-shrink: 0; }
+.nav-item-context {
+  color: var(--text-muted);
+  font-size: 11px;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .label-action-btn { opacity: 0; font-size: 16px; color: var(--text-muted); }
 .nav-item:hover .label-action-btn { opacity: 1; }

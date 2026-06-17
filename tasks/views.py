@@ -4,7 +4,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST, require_http_methods
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.conf import settings as django_settings
 
 from .models import Project, Section, Task, Label, AppSettings, TaskImage
@@ -23,9 +23,65 @@ def _sidebar_context():
     return {
         'projects': Project.objects.filter(is_inbox=False),
         'labels': Label.objects.all(),
+        'favorite_sections': Section.objects.filter(is_favorite=True).select_related('project').order_by(
+            'favorite_order', 'project__order', 'project__name', 'order', 'name', 'pk'
+        ),
         'inbox': inbox,
         'inbox_task_count': Task.objects.filter(project=inbox, completed=False, parent__isnull=True).count(),
     }
+
+
+def _normalize_favorite_order():
+    sections = list(
+        Section.objects
+        .filter(is_favorite=True)
+        .select_related('project')
+        .order_by('favorite_order', 'project__order', 'project__name', 'order', 'name', 'pk')
+    )
+    changed = []
+    for order, section in enumerate(sections):
+        if section.favorite_order != order:
+            section.favorite_order = order
+            changed.append(section)
+
+    if changed:
+        Section.objects.bulk_update(changed, ['favorite_order'])
+
+
+def _move_section_to_end_if_empty(section_id):
+    if not section_id:
+        return
+
+    section = Section.objects.filter(pk=section_id).first()
+    if not section:
+        return
+
+    has_visible_tasks = Task.objects.filter(
+        project_id=section.project_id,
+        section_id=section.pk,
+        completed=False,
+        parent__isnull=True,
+    ).exists()
+    if has_visible_tasks:
+        return
+
+    sections = list(
+        Section.objects
+        .filter(project_id=section.project_id)
+        .order_by('order', 'name', 'pk')
+    )
+    if not sections or sections[-1].pk == section.pk:
+        return
+
+    ordered_sections = [s for s in sections if s.pk != section.pk] + [section]
+    changed = []
+    for order, item in enumerate(ordered_sections):
+        if item.order != order:
+            item.order = order
+            changed.append(item)
+
+    if changed:
+        Section.objects.bulk_update(changed, ['order'])
 
 
 def project_view(request, project_id):
@@ -141,7 +197,30 @@ def section_delete(request, section_id):
     section = get_object_or_404(Section, pk=section_id)
     project_id = section.project.pk
     section.delete()
+    _normalize_favorite_order()
     return redirect('project', project_id=project_id)
+
+
+@require_POST
+def section_toggle_favorite(request, section_id):
+    section = get_object_or_404(Section, pk=section_id)
+
+    if section.is_favorite:
+        section.is_favorite = False
+        section.favorite_order = 0
+    else:
+        max_order = Section.objects.filter(is_favorite=True).aggregate(Max('favorite_order'))['favorite_order__max']
+        section.is_favorite = True
+        section.favorite_order = 0 if max_order is None else max_order + 1
+
+    section.save(update_fields=['is_favorite', 'favorite_order'])
+    if not section.is_favorite:
+        _normalize_favorite_order()
+
+    next_url = request.POST.get('next', '')
+    if next_url.startswith('/'):
+        return redirect(next_url)
+    return redirect('project', project_id=section.project_id)
 
 
 # --- Tasks CRUD ---
@@ -229,6 +308,10 @@ def task_detail(request, task_id):
 @require_POST
 def task_edit(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
+    old_section_id = task.section_id
+    old_parent_id = task.parent_id
+    old_completed = task.completed
+
     task.title = request.POST.get('title', task.title).strip()
     task.description = request.POST.get('description', task.description)
     task.priority = int(request.POST.get('priority', task.priority))
@@ -247,6 +330,9 @@ def task_edit(request, task_id):
     task.parent = get_object_or_404(Task, pk=parent_id) if parent_id else None
 
     task.save()
+    if old_section_id and old_parent_id is None and not old_completed:
+        _move_section_to_end_if_empty(old_section_id)
+
     back = request.POST.get('back', '')
     if back and back.startswith('/'):
         return redirect(back)
@@ -258,10 +344,13 @@ def task_edit(request, task_id):
 @require_POST
 def task_complete(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
+    old_section_id = task.section_id if task.parent_id is None else None
+
     task.completed = True
     task.completed_at = timezone.now()
     task.save()
     task.subtasks.filter(completed=False).update(completed=True, completed_at=timezone.now())
+    _move_section_to_end_if_empty(old_section_id)
     return JsonResponse({'status': 'ok'})
 
 
@@ -270,8 +359,12 @@ def task_delete(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
     project_id = task.project.pk
     parent_id = task.parent.pk if task.parent else None
+    old_section_id = task.section_id if task.parent_id is None and not task.completed else None
+
     back = request.POST.get('back', '')
     task.delete()
+    _move_section_to_end_if_empty(old_section_id)
+
     if back and back.startswith('/'):
         return redirect(back)
     if parent_id:
@@ -282,13 +375,36 @@ def task_delete(request, task_id):
 @require_POST
 def task_reorder(request):
     data = json.loads(request.body)
+    task_ids = [item['id'] for item in data]
+    old_tasks = {
+        task.pk: task
+        for task in Task.objects.filter(pk__in=task_ids)
+    }
+    sections_to_check = set()
+
     # data = [{id: x, order: y, section_id: z|null, parent_id: z|null}, ...]
     for item in data:
+        old_task = old_tasks.get(item['id'])
+        new_section_id = item.get('section_id')
+        new_parent_id = item.get('parent_id')
+        if (
+            old_task
+            and old_task.section_id
+            and old_task.parent_id is None
+            and not old_task.completed
+            and (old_task.section_id != new_section_id or new_parent_id is not None)
+        ):
+            sections_to_check.add(old_task.section_id)
+
         Task.objects.filter(pk=item['id']).update(
             order=item['order'],
-            section_id=item.get('section_id'),
-            parent_id=item.get('parent_id'),
+            section_id=new_section_id,
+            parent_id=new_parent_id,
         )
+
+    for section_id in sections_to_check:
+        _move_section_to_end_if_empty(section_id)
+
     return JsonResponse({'status': 'ok'})
 
 
@@ -331,6 +447,23 @@ def get_tasks_for_parent(request, project_id):
         project_id=project_id, parent__isnull=True, completed=False
     ).values('id', 'title')
     return JsonResponse({'tasks': list(tasks)})
+
+
+def app_revision(request):
+    db_path = str(django_settings.DATABASES['default']['NAME'])
+    paths = [db_path, f'{db_path}-wal', f'{db_path}-journal']
+
+    parts = []
+    for path in paths:
+        try:
+            stat = os.stat(path)
+        except FileNotFoundError:
+            continue
+        parts.append(f'{os.path.basename(path)}:{stat.st_mtime_ns}:{stat.st_size}')
+
+    response = JsonResponse({'revision': '|'.join(parts) or 'missing'})
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 # --- Settings ---
@@ -451,6 +584,14 @@ def section_reorder(request):
     return JsonResponse({'status': 'ok'})
 
 
+@require_POST
+def section_favorite_reorder(request):
+    for order, item in enumerate(json.loads(request.body)):
+        Section.objects.filter(pk=item['id'], is_favorite=True).update(favorite_order=order)
+    _normalize_favorite_order()
+    return JsonResponse({'status': 'ok'})
+
+
 def login_view(request):
     error = None
     if request.method == 'POST':
@@ -481,8 +622,10 @@ def service_worker(request):
     path = os.path.join(django_settings.BASE_DIR, 'static', 'tasks', 'sw.js')
     with open(path, 'r') as f:
         content = f.read()
-    return HttpResponse(content, content_type='application/javascript',
-                        headers={'Service-Worker-Allowed': '/'})
+    response = HttpResponse(content, content_type='application/javascript')
+    response['Service-Worker-Allowed'] = '/'
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 def manifest(request):

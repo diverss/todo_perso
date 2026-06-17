@@ -446,11 +446,12 @@ async function saveOrder(evt) {
   });
 }
 
-/* ── Sidebar sortable (projets + étiquettes) ── */
+/* ── Sidebar sortable (projets + favoris + étiquettes) ── */
 function _initSidebarSortable() {
   const lists = [
-    { id: 'projectNavList', url: '/project/reorder/' },
-    { id: 'labelNavList',   url: '/label/reorder/'   },
+    { id: 'projectNavList',  url: '/project/reorder/' },
+    { id: 'favoriteNavList', url: '/section/favorites/reorder/' },
+    { id: 'labelNavList',    url: '/label/reorder/'   },
   ];
   lists.forEach(({ id, url }) => {
     const el = document.getElementById(id);

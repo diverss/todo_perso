@@ -58,6 +58,27 @@
         </div>
       </div>
 
+      <!-- Favorites -->
+      <div class="nav-section">
+        <div class="nav-section-header">
+          <span>Favoris</span>
+        </div>
+        <div id="favoriteNavList">
+        {% for fav in favorite_sections %}
+        <a href="{% url 'project' fav.project.pk %}?section={{ fav.pk }}"
+           class="nav-item favorite-nav-item"
+           data-id="{{ fav.pk }}">
+          <span class="nav-drag-handle"></span>
+          <span class="favorite-star">&#9733;</span>
+          <span class="nav-item-name">{{ fav.name }}</span>
+          <span class="nav-item-context">{{ fav.project.name }}</span>
+        </a>
+        {% empty %}
+        <p class="nav-empty">Aucun favori</p>
+        {% endfor %}
+        </div>
+      </div>
+
       <!-- Labels -->
       <div class="nav-section">
         <div class="nav-section-header">
