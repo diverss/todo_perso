@@ -68,6 +68,7 @@
           <label class="form-label">Projet</label>
           <select name="project_id" class="form-input form-select" id="detailProjectSelect"
                   onchange="loadSections(this.value)">
+            <option value="{{ inbox.pk }}" {% if task.project.pk == inbox.pk %}selected{% endif %}>{{ inbox.name }}</option>
             {% for p in projects %}
             <option value="{{ p.pk }}" {% if task.project.pk == p.pk %}selected{% endif %}>{{ p.name }}</option>
             {% endfor %}

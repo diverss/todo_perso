@@ -10,6 +10,7 @@ from .views import (
     section_toggle_favorite,
     task_complete,
     task_delete,
+    task_detail,
     task_edit,
     task_reorder,
 )
@@ -177,3 +178,25 @@ class SectionFavoriteTests(TestCase):
         self.assertIn(f'/project/{self.project.pk}/?section={self.beta.pk}', html)
         self.assertContains(response, 'Retirer des favoris')
         self.assertContains(response, 'Ajouter aux favoris')
+
+
+class TaskDetailInboxTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.inbox = Project.objects.create(name='A trier', is_inbox=True)
+        self.project = Project.objects.create(name='Projet')
+
+    @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+    def test_inbox_task_edit_form_keeps_inbox_selected(self):
+        task = Task.objects.create(title='A classer', project=self.inbox)
+
+        request = self.factory.get(f'/task/{task.pk}/')
+        request.resolver_match = resolve(f'/task/{task.pk}/')
+        response = task_detail(request, task.pk)
+
+        self.assertContains(
+            response,
+            f'<option value="{self.inbox.pk}" selected>A trier</option>',
+            html=True,
+        )
+        self.assertContains(response, f'<option value="{self.project.pk}">Projet</option>', html=True)

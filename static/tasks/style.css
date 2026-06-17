@@ -764,4 +764,8 @@ body.is-offline .app-layout { margin-top: 36px; }
 /* ── Export Obsidian ── */
 .obsidian-file-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 12px; }
 .obsidian-file-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; background: var(--bg3); border-radius: 6px; }
+.obsidian-file-item.selected { box-shadow: inset 0 0 0 1px var(--accent); }
 .obsidian-file-name { font-size: .85rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.obsidian-file-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.obsidian-file-actions .btn[disabled] { opacity: .65; cursor: default; }
+.obsidian-remove-file { min-width: 28px; line-height: 1; }

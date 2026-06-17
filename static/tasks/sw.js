@@ -6,7 +6,7 @@
  *   - POST                → laissé passer (géré par pwa.js côté client)
  */
 
-const CACHE = 'todo-v4';
+const CACHE = 'todo-v6';
 
 // Pré-cache minimal (shell de l'app)
 const PRECACHE = [

@@ -600,61 +600,144 @@ async function _obsSaveHandle(handle) {
   });
 }
 
+async function _obsDeleteHandle(id) {
+  const db = await _openObsidianDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(_OBS_STORE, 'readwrite');
+    tx.objectStore(_OBS_STORE).delete(id);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 async function _obsLoadHandles() {
   const db = await _openObsidianDB();
   return new Promise((resolve, reject) => {
     const req = db.transaction(_OBS_STORE, 'readonly').objectStore(_OBS_STORE).getAll();
-    req.onsuccess = e => resolve(e.target.result.sort((a, b) => b.lastUsed - a.lastUsed));
+    req.onsuccess = e => resolve(e.target.result.sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0)));
     req.onerror = () => reject(req.error);
   });
 }
 
 let _obsHandle = null;
 let _obsEntries = {};
+let _obsSelectedId = null;
 
-async function openExportObsidian() {
-  _obsHandle = null;
-  _obsEntries = {};
-  document.getElementById('obsidianExportBtn').disabled = true;
-  document.getElementById('obsidianChosenFile').textContent = '';
+function _obsSetSelectedHandle(handle, name, id = null) {
+  _obsHandle = handle || null;
+  _obsSelectedId = id;
+  document.getElementById('obsidianChosenFile').textContent = name || '';
+  document.getElementById('obsidianExportBtn').disabled = !_obsHandle;
+  document.querySelectorAll('.obsidian-file-item').forEach(item => {
+    const selected = parseInt(item.dataset.obsId) === _obsSelectedId;
+    item.classList.toggle('selected', selected);
+    const useBtn = item.querySelector('[data-obs-use-id]');
+    if (useBtn) {
+      useBtn.disabled = selected;
+      useBtn.textContent = selected ? 'Choisi' : 'Utiliser';
+    }
+  });
+}
 
+function _obsRenderFileList(entries) {
   const recentSection = document.getElementById('obsidianRecentSection');
   const list = document.getElementById('obsidianFileList');
   list.innerHTML = '';
+  _obsEntries = {};
+
+  if (!entries.length) {
+    recentSection.style.display = 'none';
+    return;
+  }
+
+  entries.forEach(entry => {
+    _obsEntries[entry.id] = entry;
+
+    const item = document.createElement('div');
+    item.className = 'obsidian-file-item';
+    item.dataset.obsId = entry.id;
+
+    const name = document.createElement('span');
+    name.className = 'obsidian-file-name';
+    name.textContent = entry.name;
+
+    const actions = document.createElement('div');
+    actions.className = 'obsidian-file-actions';
+
+    const useBtn = document.createElement('button');
+    useBtn.type = 'button';
+    useBtn.className = 'btn btn-sm btn-ghost';
+    useBtn.dataset.obsUseId = entry.id;
+    useBtn.textContent = 'Utiliser';
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn-icon obsidian-remove-file';
+    removeBtn.dataset.obsRemoveId = entry.id;
+    removeBtn.title = 'Retirer de la liste';
+    removeBtn.setAttribute('aria-label', `Retirer ${entry.name} de la liste`);
+    removeBtn.textContent = '\u00d7';
+
+    actions.append(useBtn, removeBtn);
+    item.append(name, actions);
+    list.appendChild(item);
+  });
+
+  recentSection.style.display = '';
+  _obsSetSelectedHandle(_obsHandle, document.getElementById('obsidianChosenFile').textContent, _obsSelectedId);
+}
+
+async function _obsEnsureWritePermission(handle) {
+  if (!handle?.queryPermission || !handle?.requestPermission) return 'granted';
+  const opts = { mode: 'readwrite' };
+  const current = await handle.queryPermission(opts);
+  if (current === 'granted') return current;
+  return handle.requestPermission(opts);
+}
+
+async function openExportObsidian() {
+  _obsEntries = {};
+  _obsSetSelectedHandle(null, '');
 
   try {
     const entries = await _obsLoadHandles();
-    if (entries.length > 0) {
-      entries.forEach(entry => {
-        _obsEntries[entry.id] = entry;
-        const d = document.createElement('div');
-        d.className = 'obsidian-file-item';
-        d.innerHTML = `<span class="obsidian-file-name">&#128196; ${entry.name}</span>
-          <button class="btn btn-sm btn-ghost" data-obs-id="${entry.id}">Utiliser</button>`;
-        list.appendChild(d);
-      });
-      recentSection.style.display = '';
-    } else {
-      recentSection.style.display = 'none';
-    }
+    if (entries.length) _obsSetSelectedHandle(entries[0].handle, entries[0].name, entries[0].id);
+    _obsRenderFileList(entries);
   } catch (_) {
-    recentSection.style.display = 'none';
+    document.getElementById('obsidianRecentSection').style.display = 'none';
   }
 
   openModal('modalExportObsidian');
 }
 
 document.addEventListener('click', async e => {
-  const btn = e.target.closest('[data-obs-id]');
+  const removeBtn = e.target.closest('[data-obs-remove-id]');
+  if (removeBtn) {
+    const id = parseInt(removeBtn.dataset.obsRemoveId);
+    const wasSelected = _obsSelectedId === id;
+    try {
+      await _obsDeleteHandle(id);
+      const entries = await _obsLoadHandles();
+      if (wasSelected) {
+        const next = entries[0];
+        _obsSetSelectedHandle(next?.handle, next?.name || '', next?.id || null);
+      }
+      _obsRenderFileList(entries);
+      showToast('Fichier retiré de la liste');
+    } catch (err) {
+      showToast('Erreur : ' + err.message);
+    }
+    return;
+  }
+
+  const btn = e.target.closest('[data-obs-use-id]');
   if (!btn) return;
-  const entry = _obsEntries[parseInt(btn.dataset.obsId)];
+  const entry = _obsEntries[parseInt(btn.dataset.obsUseId)];
   if (!entry?.handle) return;
   try {
-    const perm = await entry.handle.requestPermission({ mode: 'readwrite' });
+    const perm = await _obsEnsureWritePermission(entry.handle);
     if (perm !== 'granted') { showToast('Permission refusée'); return; }
-    _obsHandle = entry.handle;
-    document.getElementById('obsidianChosenFile').textContent = entry.name;
-    document.getElementById('obsidianExportBtn').disabled = false;
+    _obsSetSelectedHandle(entry.handle, entry.name, entry.id);
   } catch (err) {
     showToast('Erreur : ' + err.message);
   }
@@ -669,24 +752,7 @@ async function pickObsidianFile() {
     const [handle] = await window.showOpenFilePicker({
       types: [{ description: 'Markdown', accept: { 'text/plain': ['.md'] } }],
     });
-    await _obsSaveHandle(handle);
-    _obsHandle = handle;
-    document.getElementById('obsidianChosenFile').textContent = handle.name;
-    document.getElementById('obsidianExportBtn').disabled = false;
-    // Rafraîchir la liste
-    const entries = await _obsLoadHandles();
-    const list = document.getElementById('obsidianFileList');
-    list.innerHTML = '';
-    _obsEntries = {};
-    entries.forEach(entry => {
-      _obsEntries[entry.id] = entry;
-      const d = document.createElement('div');
-      d.className = 'obsidian-file-item';
-      d.innerHTML = `<span class="obsidian-file-name">&#128196; ${entry.name}</span>
-        <button class="btn btn-sm btn-ghost" data-obs-id="${entry.id}">Utiliser</button>`;
-      list.appendChild(d);
-    });
-    document.getElementById('obsidianRecentSection').style.display = '';
+    _obsSetSelectedHandle(handle, handle.name);
   } catch (err) {
     if (err.name !== 'AbortError') showToast('Erreur : ' + err.message);
   }
@@ -696,15 +762,15 @@ async function confirmExportObsidian() {
   if (!_obsHandle) return;
   const task = JSON.parse(document.getElementById('obsidian-task-data').textContent);
 
-  const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-  let block = `\n## ${task.title}\n_${dateStr}_\n`;
+  let block = `\n#### ${task.title}\n`;
   if (task.description.trim()) block += `\n${task.description}\n`;
   for (const img of task.images) {
     block += `\n![${img.name}](${location.origin}${img.url})\n`;
   }
-  block += '\n---\n';
 
   try {
+    const perm = await _obsEnsureWritePermission(_obsHandle);
+    if (perm !== 'granted') { showToast('Permission refusée'); return; }
     const file = await _obsHandle.getFile();
     const lines = (await file.text()).split('\n');
     lines.splice(0, 0, block);
@@ -715,6 +781,8 @@ async function confirmExportObsidian() {
     showToast('Erreur écriture : ' + err.message);
     return;
   }
+
+  try { await _obsSaveHandle(_obsHandle); } catch (_) {}
 
   const fd = new FormData();
   fd.append('csrfmiddlewaretoken', getCsrf());
