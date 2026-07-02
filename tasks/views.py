@@ -20,6 +20,7 @@ def _get_inbox():
 
 def _sidebar_context():
     inbox = _get_inbox()
+    print("toto")
     return {
         'projects': Project.objects.filter(is_inbox=False),
         'labels': Label.objects.all(),
