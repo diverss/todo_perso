@@ -8,6 +8,7 @@ from .views import (
     project_view,
     section_favorite_reorder,
     section_toggle_favorite,
+    search_view,
     task_complete,
     task_delete,
     task_detail,
@@ -200,3 +201,23 @@ class TaskDetailInboxTests(TestCase):
             html=True,
         )
         self.assertContains(response, f'<option value="{self.project.pk}">Projet</option>', html=True)
+
+
+class SearchViewTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.project = Project.objects.create(name='Projet')
+
+    @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+    def test_search_returns_active_matching_tasks_only(self):
+        Task.objects.create(title='Garage actif', description='Verifier la porte', project=self.project)
+        Task.objects.create(title='Archive garage', project=self.project, completed=True)
+
+        request = self.factory.get('/search/?q=garage')
+        request.resolver_match = resolve('/search/')
+        response = search_view(request)
+
+        self.assertContains(response, 'Garage actif')
+        self.assertNotContains(response, 'Archive garage')
+        self.assertContains(response, 'Recherche : garage')
+        self.assertContains(response, 'value="garage"')

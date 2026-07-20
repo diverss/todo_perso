@@ -46,6 +46,37 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 .app-logo { font-weight: 700; font-size: 16px; color: var(--text); letter-spacing: .5px; }
 .sidebar-toggle { color: var(--text-muted); font-size: 16px; }
+.sidebar-search { padding: 0 8px 14px; }
+.sidebar-search-field { position: relative; }
+.sidebar-search-input {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  padding: 7px 30px 7px 9px;
+  outline: none;
+}
+.sidebar-search-input:focus { border-color: #5b8def; }
+.sidebar-search-input::-webkit-search-cancel-button { display: none; }
+.sidebar-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 20px;
+}
+.sidebar-search-clear:hover { background: var(--bg3); color: var(--text); }
+.sidebar-search-clear[hidden] { display: none; }
 
 .sidebar-nav { padding: 0 8px 24px; }
 .nav-section { margin-bottom: 20px; }

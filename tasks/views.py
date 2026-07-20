@@ -135,6 +135,30 @@ def label_view(request, label_id):
     return render(request, 'tasks/label.html', ctx)
 
 
+def search_view(request):
+    query = request.GET.get('q', '').strip()
+    tasks = Task.objects.none()
+
+    if query:
+        tasks = (
+            Task.objects
+            .filter(completed=False)
+            .filter(
+                Q(title__icontains=query) |
+                Q(description__icontains=query) |
+                Q(project__name__icontains=query) |
+                Q(section__name__icontains=query) |
+                Q(label__name__icontains=query)
+            )
+            .select_related('project', 'section', 'label', 'parent')
+            .order_by('project__order', 'project__name', 'section__order', 'section__name', 'order', 'created_at')
+        )
+
+    ctx = _sidebar_context()
+    ctx.update({'query': query, 'tasks': tasks})
+    return render(request, 'tasks/search.html', ctx)
+
+
 # --- Projects CRUD ---
 
 @require_POST

@@ -39,6 +39,25 @@ document.addEventListener('click', e => {
   window.location.href = item.dataset.href;
 });
 
+/* ── Search field clear ── */
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.querySelector('.sidebar-search-input');
+  const clearBtn = document.getElementById('sidebarSearchClear');
+  if (!input || !clearBtn) return;
+
+  function updateClearButton() {
+    clearBtn.hidden = input.value.length === 0;
+  }
+
+  input.addEventListener('input', updateClearButton);
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    input.focus();
+    updateClearButton();
+  });
+  updateClearButton();
+});
+
 /* ── Textareas resize handle élargi ── */
 const TEXTAREA_RESIZE_ZONE_W = 56;
 const TEXTAREA_RESIZE_ZONE_H = 36;

@@ -35,6 +35,24 @@
       </div>
     </div>
 
+    <form class="sidebar-search" method="get" action="{% url 'search' %}">
+      <div class="sidebar-search-field">
+        <input type="search"
+               name="q"
+               class="sidebar-search-input"
+               value="{{ request.GET.q }}"
+               placeholder="Rechercher"
+               aria-label="Rechercher"
+               autocomplete="off">
+        <button type="button"
+                class="sidebar-search-clear"
+                id="sidebarSearchClear"
+                title="Vider la recherche"
+                aria-label="Vider la recherche"
+                hidden>&times;</button>
+      </div>
+    </form>
+
     <nav class="sidebar-nav">
 
       <!-- Projects -->
