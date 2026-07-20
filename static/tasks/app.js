@@ -1,4 +1,4 @@
-/* app.js — chargé APRÈS pwa.js (getCsrf + queueOfflineOp sont disponibles) */
+/* app.js  chargé APRÈS pwa.js (getCsrf + queueOfflineOp sont disponibles) */
 
 /* ── Modals ── */
 function openModal(id) {
@@ -372,7 +372,7 @@ function bindColorPresets(modalId, inputId) {
 async function _loadSectionsIntoModal(projectId, preselectSectionId) {
   const sel = document.getElementById('addTaskSectionSelect');
   if (!sel) return;
-  sel.innerHTML = '<option value="">— Aucune —</option>';
+  sel.innerHTML = '<option value="">- Aucune -</option>';
   if (!projectId) return;
   try {
     const res = await fetch(`/api/project/${projectId}/sections/`);
@@ -869,7 +869,7 @@ async function pasteImageFromClipboard(context) {
   try {
     items = await navigator.clipboard.read();
   } catch (err) {
-    showToast(err.name === 'NotAllowedError' ? 'Permission refusée — autorisez le presse-papier' : 'Erreur presse-papier');
+    showToast(err.name === 'NotAllowedError' ? 'Permission refusée : autorisez le presse-papier' : 'Erreur presse-papier');
     return;
   }
   for (const item of items) {

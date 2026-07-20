@@ -1,4 +1,4 @@
-/* pwa.js — Doit être chargé AVANT app.js
+/* pwa.js  Doit être chargé AVANT app.js
  *
  * Responsabilités :
  *  1. Enregistrer le Service Worker
@@ -111,7 +111,7 @@ async function queueOfflineOp(url, type, body, label, meta) {
   const op = { url, type, body, label: label || url, ts: Date.now(), meta: meta || {} };
   op.id = await _idbAdd(op);
   await _updatePendingUI();
-  showToast('Hors ligne — modification sauvegardée, sera synchronisée à la reconnexion.');
+  showToast('Hors ligne : modification sauvegardée, sera synchronisée à la reconnexion.');
   return op;
 }
 window.queueOfflineOp = queueOfflineOp;
@@ -908,12 +908,12 @@ async function syncPending() {
         await _finalizeSyncedOp(op, data);
         synced++;
       } else {
-        showToast(`Erreur sync (HTTP ${res.status}) — ${ops.length - synced} restante(s). Réessayez.`);
+        showToast(`Erreur sync (HTTP ${res.status}) - ${ops.length - synced} restante(s). Réessayez.`);
         break;
       }
     } catch {
       // Réseau à nouveau indisponible pendant la sync
-      showToast('Sync interrompue (réseau perdu) — elle reprendra à la prochaine connexion.');
+      showToast('Sync interrompue (réseau perdu) : elle reprendra à la prochaine connexion.');
       break;
     }
   }

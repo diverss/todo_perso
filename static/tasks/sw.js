@@ -1,4 +1,4 @@
-/* Service Worker — Todo Perso
+/* Service Worker, Todo Perso
  *
  * Stratégie :
  *   - Fichiers statiques  → cache-first, mise à jour en arrière-plan
@@ -37,7 +37,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
 
-  // On ne touche pas aux requêtes non-GET (POST…) — gérées par pwa.js
+  // On ne touche pas aux requêtes non-GET (POST…), gérées par pwa.js
   if (req.method !== 'GET') return;
   // On ne touche pas aux extensions, chrome-extension, etc.
   if (!req.url.startsWith(self.location.origin)) return;

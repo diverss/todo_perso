@@ -30,7 +30,7 @@
          style="{% if settings.default_view_type != 'project' %}display:none{% endif %}">
       <label class="form-label">Projet</label>
       <select name="default_project_id" class="form-input form-select">
-        <option value="">— Choisir —</option>
+        <option value="">- Choisir -</option>
         {% for p in projects %}
         <option value="{{ p.pk }}"
                 {% if settings.default_project and settings.default_project.pk == p.pk %}selected{% endif %}>
@@ -44,7 +44,7 @@
          style="{% if settings.default_view_type != 'label' %}display:none{% endif %}">
       <label class="form-label">Étiquette</label>
       <select name="default_label_id" class="form-input form-select">
-        <option value="">— Choisir —</option>
+        <option value="">- Choisir -</option>
         {% for l in labels %}
         <option value="{{ l.pk }}"
                 {% if settings.default_label and settings.default_label.pk == l.pk %}selected{% endif %}>

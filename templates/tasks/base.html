@@ -300,7 +300,7 @@
         <div class="form-group">
           <label>Section</label>
           <select name="section_id" id="addTaskSectionSelect" class="form-input form-select">
-            <option value="">— Aucune —</option>
+            <option value="">- Aucune -</option>
           </select>
         </div>
       </div>
@@ -308,16 +308,16 @@
         <div class="form-group">
           <label>Priorité</label>
           <select name="priority" class="form-input form-select priority-select">
-            <option value="1">🔴 P1 — Urgent</option>
-            <option value="2">🟠 P2 — Élevée</option>
-            <option value="3">🔵 P3 — Normale</option>
-            <option value="4" selected>⚪ P4 — Aucune</option>
+            <option value="1">🔴 P1 - Urgent</option>
+            <option value="2">🟠 P2 - Élevée</option>
+            <option value="3">🔵 P3 - Normale</option>
+            <option value="4" selected>⚪ P4 - Aucune</option>
           </select>
         </div>
         <div class="form-group">
           <label>Étiquette</label>
           <select name="label_id" class="form-input form-select">
-            <option value="">— Aucune —</option>
+            <option value="">- Aucune -</option>
             {% for l in labels %}
             <option value="{{ l.pk }}" data-label-name="{{ l.name }}" data-label-color="{{ l.color }}">{{ l.name }}</option>
             {% endfor %}

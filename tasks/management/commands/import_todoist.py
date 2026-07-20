@@ -5,8 +5,8 @@ Usage :
     python3 manage.py import_todoist --token <TOKEN_API> --username <USER>
     python3 manage.py import_todoist --token <TOKEN_API> --username <USER> --no-images
 
-Priorité : Todoist API — 4=urgent(rouge), 1=normal
-           Notre app   — 1=urgent(rouge), 4=normal
+Priorité : Todoist API : 4=urgent(rouge), 1=normal
+           Notre app   : 1=urgent(rouge), 4=normal
            Remapping   : notre = 5 - todoist
 """
 
@@ -70,7 +70,7 @@ class Command(BaseCommand):
                     p['cursor'] = cursor
                 r = requests.get(f'{API}/{endpoint}', headers=headers, params=p, timeout=15)
                 if not r.ok:
-                    self.stderr.write(f'Erreur {endpoint} : {r.status_code} — {r.text[:200]}')
+                    self.stderr.write(f'Erreur {endpoint} : {r.status_code} - {r.text[:200]}')
                     r.raise_for_status()
                 data = r.json()
                 # Réponse simple (liste) ou paginée (dict avec results/items)
