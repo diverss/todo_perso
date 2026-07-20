@@ -198,6 +198,7 @@ class SectionFavoriteTests(TestCase):
         self.assertIn(f'/project/{self.project.pk}/?section={self.beta.pk}', html)
         self.assertContains(response, 'Retirer des favoris')
         self.assertContains(response, 'Ajouter aux favoris')
+        self.assertContains(response, 'data-preserve-project-view')
 
 
 class TaskDetailInboxTests(TestCase):

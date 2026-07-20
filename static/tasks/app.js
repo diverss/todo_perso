@@ -1024,11 +1024,10 @@ async function confirmExportObsidian() {
   if (!_obsHandle) return;
   const task = JSON.parse(document.getElementById('obsidian-task-data').textContent);
 
-  let block = `\n#### ${task.title}\n`;
-  if (task.description.trim()) block += `\n${task.description}\n`;
-  for (const img of task.images) {
-    block += `\n![${img.name}](${location.origin}${img.url})\n`;
-  }
+  const blockLines = [`#### ${task.title}`];
+  if (task.description.trim()) blockLines.push(task.description);
+  for (const img of task.images) blockLines.push(`![${img.name}](${location.origin}${img.url})`);
+  const block = blockLines.join('\n');
 
   try {
     const perm = await _obsEnsureWritePermission(_obsHandle);

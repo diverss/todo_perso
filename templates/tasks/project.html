@@ -87,7 +87,9 @@
                     onclick="moveSectionCol({{ section.pk }}, +1)">&#9654; Déplacer à droite</button>
             <button class="dropdown-item"
                     onclick="startEditSection({{ section.pk }}, '{{ section.name|escapejs }}')">Renommer</button>
-            <form method="post" action="{% url 'section_toggle_favorite' section.pk %}">
+            <form method="post"
+                  action="{% url 'section_toggle_favorite' section.pk %}"
+                  data-preserve-project-view>
               {% csrf_token %}
               <input type="hidden" name="next" value="{{ request.get_full_path }}">
               <button type="submit" class="dropdown-item">
@@ -286,6 +288,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextSearch = params.toString();
     history.replaceState(null, '', `${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
   }
+
+  document.querySelectorAll('form[data-preserve-project-view]').forEach(form => {
+    form.addEventListener('submit', () => {
+      const next = form.querySelector('input[name="next"]');
+      if (next && window.currentViewBackUrl) next.value = window.currentViewBackUrl();
+    });
+  });
 
   // Onglets (mobile + desktop)
   document.querySelectorAll('.section-tab').forEach(tab => {
