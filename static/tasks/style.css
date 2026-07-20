@@ -501,11 +501,6 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 .color-preset:hover, .color-preset.selected { transform: scale(1.2); border-color: #fff; }
 .color-presets.small .color-preset { width: 16px; height: 16px; }
 
-/* Priority colors in select */
-.priority-select option[value="1"] { color: var(--p1); }
-.priority-select option[value="2"] { color: var(--p2); }
-.priority-select option[value="3"] { color: var(--p3); }
-
 /* ── Modals ── */
 .modal-overlay {
   display: none;
