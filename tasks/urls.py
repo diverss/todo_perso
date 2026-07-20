@@ -18,12 +18,14 @@ urlpatterns = [
     path('section/<int:section_id>/edit/', views.section_edit, name='section_edit'),
     path('section/<int:section_id>/delete/', views.section_delete, name='section_delete'),
     path('section/<int:section_id>/favorite/', views.section_toggle_favorite, name='section_toggle_favorite'),
+    path('section/<int:section_id>/restore-completed/', views.section_restore_completed_tasks, name='section_restore_completed_tasks'),
 
     # Tasks
     path('task/create/', views.task_create, name='task_create'),
     path('task/<int:task_id>/', views.task_detail, name='task_detail'),
     path('task/<int:task_id>/edit/', views.task_edit, name='task_edit'),
     path('task/<int:task_id>/complete/', views.task_complete, name='task_complete'),
+    path('task/<int:task_id>/restore/', views.task_restore, name='task_restore'),
     path('task/<int:task_id>/delete/', views.task_delete, name='task_delete'),
     path('task/reorder/', views.task_reorder, name='task_reorder'),
 

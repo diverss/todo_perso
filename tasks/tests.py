@@ -13,7 +13,9 @@ from .views import (
     label_view,
     project_delete,
     project_view,
+    section_create,
     section_favorite_reorder,
+    section_restore_completed_tasks,
     section_toggle_favorite,
     search_view,
     task_create,
@@ -22,6 +24,7 @@ from .views import (
     task_detail,
     task_edit,
     task_reorder,
+    task_restore,
 )
 
 
@@ -199,6 +202,116 @@ class SectionFavoriteTests(TestCase):
         self.assertContains(response, 'Retirer des favoris')
         self.assertContains(response, 'Ajouter aux favoris')
         self.assertContains(response, 'data-preserve-project-view')
+
+
+class SectionRecurringTasksTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('user-recurring-section')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+        self.section = Section.objects.create(
+            user=self.user,
+            name='Courses',
+            project=self.project,
+            has_recurring_tasks=True,
+        )
+
+    def test_section_create_can_mark_section_as_recurring(self):
+        request = with_user(self.factory.post(f'/project/{self.project.pk}/section/create/', data={
+            'name': 'Maison',
+            'has_recurring_tasks': '1',
+        }), self.user)
+
+        response = section_create(request, self.project.pk)
+
+        section = Section.objects.get(name='Maison')
+        self.assertTrue(section.has_recurring_tasks)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], f'/project/{self.project.pk}/')
+
+    @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+    def test_project_view_renders_recurring_section_modal(self):
+        task = Task.objects.create(
+            user=self.user,
+            title='Acheter lait',
+            project=self.project,
+            section=self.section,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+
+        request = with_user(self.factory.get(f'/project/{self.project.pk}/'), self.user)
+        request.resolver_match = resolve(f'/project/{self.project.pk}/')
+        response = project_view(request, self.project.pk)
+
+        self.assertContains(response, 'section-recurring-icon')
+        self.assertContains(response, 'Tâches récurrentes')
+        self.assertContains(response, 'Restaurer tout')
+        self.assertContains(response, 'Acheter lait')
+        self.assertContains(response, f'/task/{task.pk}/restore/')
+
+    def test_task_restore_reactivates_completed_task_and_direct_subtasks(self):
+        task = Task.objects.create(
+            user=self.user,
+            title='Acheter lait',
+            project=self.project,
+            section=self.section,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+        subtask = Task.objects.create(
+            user=self.user,
+            title='Prendre bouteille',
+            project=self.project,
+            section=self.section,
+            parent=task,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+        back = f'/project/{self.project.pk}/?section={self.section.pk}&scroll=120'
+        request = with_user(self.factory.post(f'/task/{task.pk}/restore/', data={'back': back}), self.user)
+
+        response = task_restore(request, task.pk)
+
+        task.refresh_from_db()
+        subtask.refresh_from_db()
+        self.assertFalse(task.completed)
+        self.assertIsNone(task.completed_at)
+        self.assertFalse(subtask.completed)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], back)
+
+    def test_section_restore_completed_tasks_only_restores_recurring_section_parents(self):
+        other_section = Section.objects.create(user=self.user, name='Autre', project=self.project)
+        recurring_task = Task.objects.create(
+            user=self.user,
+            title='Acheter lait',
+            project=self.project,
+            section=self.section,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+        other_task = Task.objects.create(
+            user=self.user,
+            title='Autre tâche',
+            project=self.project,
+            section=other_section,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+        request = with_user(self.factory.post(
+            f'/section/{self.section.pk}/restore-completed/',
+            data={'back': f'/project/{self.project.pk}/?section={self.section.pk}'},
+        ), self.user)
+
+        response = section_restore_completed_tasks(request, self.section.pk)
+
+        recurring_task.refresh_from_db()
+        other_task.refresh_from_db()
+        self.assertFalse(recurring_task.completed)
+        self.assertTrue(other_task.completed)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], f'/project/{self.project.pk}/?section={self.section.pk}')
 
 
 class TaskDetailInboxTests(TestCase):

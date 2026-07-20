@@ -44,6 +44,7 @@ class Section(models.Model):
     order = models.PositiveIntegerField(default=0)
     is_favorite = models.BooleanField(default=False)
     favorite_order = models.PositiveIntegerField(default=0)
+    has_recurring_tasks = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['order', 'name']

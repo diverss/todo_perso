@@ -74,6 +74,9 @@
 
     <div class="section-header">
       <span class="section-name" id="sectionName-{{ section.pk }}">{{ section.name }}</span>
+      {% if section.has_recurring_tasks %}
+      <span class="section-recurring-icon" title="Tâches récurrentes" aria-label="Tâches récurrentes">↻</span>
+      {% endif %}
       <div class="section-actions">
         <button class="btn btn-primary btn-sm section-add-task-btn"
                 onclick="openAddTask('{{ project.pk }}', '{{ section.pk }}', null, '{{ section.name|escapejs }}')"
@@ -87,6 +90,10 @@
                     onclick="moveSectionCol({{ section.pk }}, +1)">&#9654; Déplacer à droite</button>
             <button class="dropdown-item"
                     onclick="startEditSection({{ section.pk }}, '{{ section.name|escapejs }}')">Renommer</button>
+            {% if section.has_recurring_tasks %}
+            <button class="dropdown-item"
+                    onclick="openRecurringTasks({{ section.pk }})">Tâches récurrentes</button>
+            {% endif %}
             <form method="post"
                   action="{% url 'section_toggle_favorite' section.pk %}"
                   data-preserve-project-view>
@@ -131,6 +138,75 @@
 </div><!-- sections-viewport -->
 {% endif %}
 
+{% for section in sections %}
+{% if section.has_recurring_tasks %}
+<div class="modal-overlay" id="modalRecurringTasks-{{ section.pk }}">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h3>Tâches récurrentes</h3>
+      <button class="btn-icon modal-close" data-modal="modalRecurringTasks-{{ section.pk }}">&times;</button>
+    </div>
+
+    <div class="recurring-section-title">
+      <span class="section-recurring-icon" aria-hidden="true">↻</span>
+      <span>{{ section.name }}</span>
+    </div>
+
+    <div class="recurring-actions-top">
+      {% if section.completed_recurring_tasks %}
+      <form method="post"
+            action="{% url 'section_restore_completed_tasks' section.pk %}"
+            data-preserve-project-view>
+        {% csrf_token %}
+        <input type="hidden" name="back" value="{{ request.get_full_path }}">
+        <button type="submit" class="btn btn-primary btn-sm">Restaurer tout</button>
+      </form>
+      {% else %}
+      <button type="button" class="btn btn-primary btn-sm" disabled>Restaurer tout</button>
+      {% endif %}
+    </div>
+
+    <div class="recurring-task-list">
+      {% for task in section.completed_recurring_tasks %}
+      <div class="recurring-task-item">
+        <div class="recurring-task-main">
+          <span class="recurring-task-title">{{ task.title }}</span>
+          {% if task.due_date %}<span class="task-due-date">{{ task.due_date|date:"d/m/Y" }}</span>{% endif %}
+          {% if task.label %}
+          <div>
+            <span class="task-label-badge" style="background:{{ task.label.color }}20; color:{{ task.label.color }}">
+              {{ task.label.name }}
+            </span>
+          </div>
+          {% endif %}
+        </div>
+        <div class="recurring-task-actions">
+          <form method="post"
+                action="{% url 'task_restore' task.pk %}"
+                data-preserve-project-view>
+            {% csrf_token %}
+            <input type="hidden" name="back" value="{{ request.get_full_path }}">
+            <button type="submit" class="btn btn-ghost btn-sm">Restaurer</button>
+          </form>
+          <form method="post"
+                action="{% url 'task_delete' task.pk %}"
+                data-preserve-project-view
+                onsubmit="return confirm('Supprimer définitivement cette tâche ?')">
+            {% csrf_token %}
+            <input type="hidden" name="back" value="{{ request.get_full_path }}">
+            <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+          </form>
+        </div>
+      </div>
+      {% empty %}
+      <p class="task-list-empty">Aucune tâche terminée dans cette section.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
 <!-- Modal: Nouvelle section -->
 <div class="modal-overlay" id="modalAddSection">
   <div class="modal">
@@ -143,6 +219,12 @@
       <div class="form-group">
         <input type="text" name="name" class="form-input form-input-title"
                placeholder="Nom de la section" required autofocus id="sectionNameInput">
+      </div>
+      <div class="form-group">
+        <label class="form-checkbox">
+          <input type="checkbox" name="has_recurring_tasks" value="1">
+          <span>Tâches récurrentes</span>
+        </label>
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-ghost modal-close" data-modal="modalAddSection">Annuler</button>
@@ -211,6 +293,10 @@ function openMoveSection(sectionId, sectionName) {
   form.action = `/section/${sectionId}/edit/`;
   closeDropdown('sectionDrop-' + sectionId);
   openModal('modalMoveSection');
+}
+function openRecurringTasks(sectionId) {
+  closeDropdown('sectionDrop-' + sectionId);
+  openModal('modalRecurringTasks-' + sectionId);
 }
 
 // Déplacer une section (◀ ▶)
@@ -291,8 +377,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.querySelectorAll('form[data-preserve-project-view]').forEach(form => {
     form.addEventListener('submit', () => {
-      const next = form.querySelector('input[name="next"]');
-      if (next && window.currentViewBackUrl) next.value = window.currentViewBackUrl();
+      if (!window.currentViewBackUrl) return;
+      form.querySelectorAll('input[name="next"], input[name="back"]').forEach(input => {
+        input.value = window.currentViewBackUrl();
+      });
     });
   });
 

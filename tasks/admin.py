@@ -18,8 +18,8 @@ class ProjectAdmin(admin.ModelAdmin):
 
 @admin.register(Section)
 class SectionAdmin(admin.ModelAdmin):
-    list_display = ['name', 'project', 'user', 'is_favorite', 'order']
-    list_filter = ['user', 'project', 'is_favorite']
+    list_display = ['name', 'project', 'user', 'is_favorite', 'has_recurring_tasks', 'order']
+    list_filter = ['user', 'project', 'is_favorite', 'has_recurring_tasks']
     search_fields = ['name', 'project__name', 'user__username']
 
 

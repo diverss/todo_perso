@@ -153,7 +153,26 @@ def _owned_int_id(model, user, value, **filters):
 
 def project_view(request, project_id):
     project = get_object_or_404(Project, pk=project_id, user=request.user)
-    sections = project.sections.filter(user=request.user)
+    sections = list(project.sections.filter(user=request.user))
+    recurring_section_ids = [section.pk for section in sections if section.has_recurring_tasks]
+    completed_tasks_by_section = {section_id: [] for section_id in recurring_section_ids}
+    if recurring_section_ids:
+        completed_tasks = (
+            Task.objects
+            .filter(
+                user=request.user,
+                project=project,
+                section_id__in=recurring_section_ids,
+                completed=True,
+                parent__isnull=True,
+            )
+            .select_related('label')
+            .order_by('section_id', 'order', 'created_at')
+        )
+        for task in completed_tasks:
+            completed_tasks_by_section.setdefault(task.section_id, []).append(task)
+    for section in sections:
+        section.completed_recurring_tasks = completed_tasks_by_section.get(section.pk, [])
     tasks_no_section = project.tasks.filter(
         user=request.user, completed=False, parent__isnull=True, section__isnull=True
     )
@@ -273,7 +292,13 @@ def section_create(request, project_id):
     name = request.POST.get('name', '').strip()
     if name:
         order = project.sections.filter(user=request.user).count()
-        Section.objects.create(user=request.user, name=name, project=project, order=order)
+        Section.objects.create(
+            user=request.user,
+            name=name,
+            project=project,
+            order=order,
+            has_recurring_tasks=request.POST.get('has_recurring_tasks') == '1',
+        )
     return redirect('project', project_id=project.pk)
 
 
@@ -321,6 +346,32 @@ def section_toggle_favorite(request, section_id):
     if next_url.startswith('/'):
         return redirect(next_url)
     return redirect('project', project_id=section.project_id)
+
+
+@require_POST
+def section_restore_completed_tasks(request, section_id):
+    section = get_object_or_404(Section, pk=section_id, user=request.user, has_recurring_tasks=True)
+    op_dt = _operation_datetime(request)
+    parent_tasks = Task.objects.filter(
+        user=request.user,
+        project=section.project,
+        section=section,
+        completed=True,
+        parent__isnull=True,
+    )
+    parent_ids = list(parent_tasks.values_list('pk', flat=True))
+    restored = parent_tasks.update(completed=False, completed_at=None, updated_at=op_dt)
+    if parent_ids:
+        Task.objects.filter(user=request.user, parent_id__in=parent_ids, completed=True).update(
+            completed=False,
+            completed_at=None,
+            updated_at=op_dt,
+        )
+
+    back = _local_redirect_url(request.POST.get('back', ''))
+    if back:
+        return redirect(back)
+    return redirect(reverse('project', args=[section.project_id]) + f'?section={section.pk}')
 
 
 # --- Tasks CRUD ---
@@ -504,6 +555,36 @@ def task_delete(request, task_id):
 
 
 @require_POST
+def task_restore(request, task_id):
+    task = get_object_or_404(
+        Task.objects.select_related('section', 'project'),
+        pk=task_id,
+        user=request.user,
+        completed=True,
+        parent__isnull=True,
+        section__has_recurring_tasks=True,
+    )
+    if _is_stale_task_operation(request, task):
+        return _stale_task_response()
+
+    op_dt = _operation_datetime(request)
+    task.completed = False
+    task.completed_at = None
+    task.updated_at = op_dt
+    task.save(update_fields=['completed', 'completed_at', 'updated_at'])
+    task.subtasks.filter(user=request.user, completed=True).update(
+        completed=False,
+        completed_at=None,
+        updated_at=op_dt,
+    )
+
+    back = _local_redirect_url(request.POST.get('back', ''))
+    if back:
+        return redirect(back)
+    return redirect(reverse('project', args=[task.project_id]) + f'?section={task.section_id}')
+
+
+@require_POST
 def task_reorder(request):
     data = json.loads(request.body)
     op_dt = _operation_datetime(request)
@@ -613,7 +694,7 @@ def app_revision(request):
     user = request.user
     parts = [
         f'p:{_revision_rows(Project.objects.filter(user=user), "name", "color", "order", "is_inbox")}',
-        f's:{_revision_rows(Section.objects.filter(user=user), "name", "project_id", "order", "is_favorite", "favorite_order")}',
+        f's:{_revision_rows(Section.objects.filter(user=user), "name", "project_id", "order", "is_favorite", "favorite_order", "has_recurring_tasks")}',
         f'l:{_revision_rows(Label.objects.filter(user=user), "name", "color", "order")}',
         f't:{_revision_rows(Task.objects.filter(user=user), "project_id", "section_id", "parent_id", "label_id", "due_date", "priority", "order", "label_order", "completed", "updated_at")}',
         f'i:{_revision_rows(TaskImage.objects.filter(task__user=user), "task_id", "uploaded_at")}',
