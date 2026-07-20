@@ -448,7 +448,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   padding: 24px;
   margin-bottom: 24px;
 }
-.task-detail-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 20px; }
+.task-detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.task-detail-header .form-input-title { flex: 1; min-width: 0; }
+.task-detail-save-top { flex-shrink: 0; }
 .subtask-section { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
 .subtask-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .subtask-section-header h3 { font-size: 14px; font-weight: 600; }
