@@ -12,26 +12,20 @@
   </div>
 
   <div class="task-detail-card">
-
-    <!-- Complete button + title -->
-    <div class="task-detail-header">
-      <button class="task-complete-btn task-complete-btn-lg"
-              data-task-id="{{ task.pk }}"
-              data-redirect="{% if back_url %}{{ back_url }}{% else %}{% url 'project' task.project.pk %}{% endif %}"
-              style="--priority-color:{{ task.priority_color|default:'#555' }}"
-              title="Terminer la tâche">
-      </button>
-      <h2 class="task-detail-title" id="taskDetailTitle">{{ task.title }}</h2>
-    </div>
-
     <!-- Edit form -->
     <form method="post" action="{% url 'task_edit' task.pk %}" id="taskEditForm">
       {% csrf_token %}
       <input type="hidden" name="back" value="{{ back_url }}">
 
-      <div class="form-group">
-        <label class="form-label">Titre</label>
-        <input type="text" name="title" class="form-input" value="{{ task.title }}" required>
+      <div class="task-detail-header">
+        <button type="button"
+                class="task-complete-btn task-complete-btn-lg"
+                data-task-id="{{ task.pk }}"
+                data-redirect="{% if back_url %}{{ back_url }}{% else %}{% url 'project' task.project.pk %}{% endif %}"
+                style="--priority-color:{{ task.priority_color|default:'#555' }}"
+                title="Terminer la tâche">
+        </button>
+        <input type="text" name="title" class="form-input form-input-title" value="{{ task.title }}" required>
       </div>
 
       <div class="form-group">
