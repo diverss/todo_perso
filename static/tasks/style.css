@@ -591,8 +591,6 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
   border-top: 1px solid var(--border);
 }
 .nav-icon { font-size: 15px; }
-.nav-item-logout { color: var(--text-muted); }
-.nav-item-logout:hover { color: var(--accent); }
 
 /* ── Login page ── */
 .login-wrap {

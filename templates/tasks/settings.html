@@ -80,6 +80,11 @@
   <p id="purgeResult" class="settings-result" style="display:none"></p>
 </div>
 
+<div class="settings-card">
+  <h2 class="settings-section-title">Session</h2>
+  <a href="{% url 'logout' %}" class="btn btn-ghost">Déconnexion</a>
+</div>
+
 <script>
 function updateSettingsForm(val) {
   document.getElementById('settingsProjectRow').style.display = val === 'project' ? '' : 'none';
