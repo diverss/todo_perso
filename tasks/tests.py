@@ -281,6 +281,26 @@ class SectionRecurringTasksTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], back)
 
+    def test_task_restore_ajax_returns_json(self):
+        task = Task.objects.create(
+            user=self.user,
+            title='Acheter lait',
+            project=self.project,
+            section=self.section,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+        request = with_user(self.factory.post(
+            f'/task/{task.pk}/restore/',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        ), self.user)
+
+        response = task_restore(request, task.pk)
+
+        self.assertJSONEqual(response.content, {'status': 'ok'})
+        task.refresh_from_db()
+        self.assertFalse(task.completed)
+
     def test_section_restore_completed_tasks_only_restores_recurring_section_parents(self):
         other_section = Section.objects.create(user=self.user, name='Autre', project=self.project)
         recurring_task = Task.objects.create(
@@ -312,6 +332,43 @@ class SectionRecurringTasksTests(TestCase):
         self.assertTrue(other_task.completed)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], f'/project/{self.project.pk}/?section={self.section.pk}')
+
+    def test_section_restore_completed_tasks_ajax_returns_json(self):
+        Task.objects.create(
+            user=self.user,
+            title='Acheter lait',
+            project=self.project,
+            section=self.section,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+        request = with_user(self.factory.post(
+            f'/section/{self.section.pk}/restore-completed/',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        ), self.user)
+
+        response = section_restore_completed_tasks(request, self.section.pk)
+
+        self.assertJSONEqual(response.content, {'status': 'ok', 'restored': 1})
+
+    def test_completed_task_delete_ajax_returns_json(self):
+        task = Task.objects.create(
+            user=self.user,
+            title='Acheter lait',
+            project=self.project,
+            section=self.section,
+            completed=True,
+            completed_at=timezone.now(),
+        )
+        request = with_user(self.factory.post(
+            f'/task/{task.pk}/delete/',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        ), self.user)
+
+        response = task_delete(request, task.pk)
+
+        self.assertJSONEqual(response.content, {'status': 'ok'})
+        self.assertFalse(Task.objects.filter(pk=task.pk).exists())
 
 
 class TaskDetailInboxTests(TestCase):

@@ -368,6 +368,9 @@ def section_restore_completed_tasks(request, section_id):
             updated_at=op_dt,
         )
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'status': 'ok', 'restored': restored})
+
     back = _local_redirect_url(request.POST.get('back', ''))
     if back:
         return redirect(back)
@@ -547,6 +550,9 @@ def task_delete(request, task_id):
     task.delete()
     _move_section_to_end_if_empty(old_section_id, request.user)
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'status': 'ok'})
+
     if back:
         return redirect(back)
     if parent_id:
@@ -577,6 +583,9 @@ def task_restore(request, task_id):
         completed_at=None,
         updated_at=op_dt,
     )
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'status': 'ok'})
 
     back = _local_redirect_url(request.POST.get('back', ''))
     if back:

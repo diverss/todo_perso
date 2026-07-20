@@ -70,13 +70,17 @@
 <div class="sections-board" id="sectionsBoard">
   {% for section in sections %}
   <div class="section-col" id="sectionCol-{{ section.pk }}"
-       data-col="{{ forloop.counter0 }}" data-section-id="{{ section.pk }}">
+       data-col="{{ forloop.counter0 }}"
+       data-section-id="{{ section.pk }}"
+       data-recurring="{% if section.has_recurring_tasks %}1{% else %}0{% endif %}">
 
     <div class="section-header">
-      <span class="section-name" id="sectionName-{{ section.pk }}">{{ section.name }}</span>
-      {% if section.has_recurring_tasks %}
-      <span class="section-recurring-icon" title="Tâches récurrentes" aria-label="Tâches récurrentes">↻</span>
-      {% endif %}
+      <div class="section-title-group">
+        <span class="section-name" id="sectionName-{{ section.pk }}">{{ section.name }}</span>
+        {% if section.has_recurring_tasks %}
+        <span class="section-recurring-icon" title="Tâches récurrentes" aria-label="Tâches récurrentes">↻</span>
+        {% endif %}
+      </div>
       <div class="section-actions">
         <button class="btn btn-primary btn-sm section-add-task-btn"
                 onclick="openAddTask('{{ project.pk }}', '{{ section.pk }}', null, '{{ section.name|escapejs }}')"
@@ -153,22 +157,33 @@
     </div>
 
     <div class="recurring-actions-top">
-      {% if section.completed_recurring_tasks %}
       <form method="post"
             action="{% url 'section_restore_completed_tasks' section.pk %}"
+            class="recurring-restore-all-form"
             data-preserve-project-view>
         {% csrf_token %}
         <input type="hidden" name="back" value="{{ request.get_full_path }}">
-        <button type="submit" class="btn btn-primary btn-sm">Restaurer tout</button>
+        <button type="submit" class="btn btn-primary btn-sm" {% if not section.completed_recurring_tasks %}disabled{% endif %}>Restaurer tout</button>
       </form>
-      {% else %}
-      <button type="button" class="btn btn-primary btn-sm" disabled>Restaurer tout</button>
-      {% endif %}
     </div>
 
-    <div class="recurring-task-list">
+    <div class="recurring-task-list"
+         data-project-id="{{ project.pk }}"
+         data-section-id="{{ section.pk }}">
       {% for task in section.completed_recurring_tasks %}
-      <div class="recurring-task-item">
+      <div class="recurring-task-item"
+           data-task-id="{{ task.pk }}"
+           data-task-title="{{ task.title }}"
+           data-project-id="{{ task.project_id }}"
+           data-section-id="{{ task.section_id }}"
+           data-parent-id=""
+           data-priority="{{ task.priority }}"
+           data-priority-color="{{ task.priority_color|default:'#555' }}"
+           data-label-id="{{ task.label_id|default:'' }}"
+           data-label-name="{% if task.label %}{{ task.label.name }}{% endif %}"
+           data-label-color="{% if task.label %}{{ task.label.color }}{% endif %}"
+           data-due-date="{{ task.due_date|date:'Y-m-d' }}"
+           data-order="{{ task.order }}">
         <div class="recurring-task-main">
           <span class="recurring-task-title">{{ task.title }}</span>
           {% if task.due_date %}<span class="task-due-date">{{ task.due_date|date:"d/m/Y" }}</span>{% endif %}
@@ -183,6 +198,7 @@
         <div class="recurring-task-actions">
           <form method="post"
                 action="{% url 'task_restore' task.pk %}"
+                class="recurring-restore-form"
                 data-preserve-project-view>
             {% csrf_token %}
             <input type="hidden" name="back" value="{{ request.get_full_path }}">
@@ -190,6 +206,7 @@
           </form>
           <form method="post"
                 action="{% url 'task_delete' task.pk %}"
+                class="recurring-delete-form"
                 data-preserve-project-view
                 onsubmit="return confirm('Supprimer définitivement cette tâche ?')">
             {% csrf_token %}

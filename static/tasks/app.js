@@ -403,6 +403,328 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+/* ── Recurring section tasks ── */
+function _formatDisplayDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '');
+}
+
+function _directEmptyMessages(container) {
+  return [...container.children].filter(child => child.classList.contains('task-list-empty'));
+}
+
+function _setHiddenInput(form, name, value) {
+  let input = form.querySelector(`input[name="${name}"]`);
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    form.appendChild(input);
+  }
+  input.value = value;
+}
+
+function _preserveCurrentProjectView(form) {
+  if (!window.currentViewBackUrl) return;
+  const back = window.currentViewBackUrl();
+  form.querySelectorAll('input[name="next"], input[name="back"]').forEach(input => {
+    input.value = back;
+  });
+}
+
+function _recurringList(sectionId) {
+  return document.querySelector(`#modalRecurringTasks-${sectionId} .recurring-task-list`);
+}
+
+function _recurringRestoreAllButton(sectionId) {
+  return document.querySelector(`#modalRecurringTasks-${sectionId} .recurring-restore-all-form button[type="submit"]`);
+}
+
+function _updateRecurringListState(sectionId) {
+  const list = _recurringList(sectionId);
+  if (!list) return;
+  const hasTasks = Boolean(list.querySelector('.recurring-task-item'));
+  _directEmptyMessages(list).forEach(el => el.remove());
+  if (!hasTasks) {
+    const empty = document.createElement('p');
+    empty.className = 'task-list-empty';
+    empty.textContent = 'Aucune tâche terminée dans cette section.';
+    list.appendChild(empty);
+  }
+  const restoreAll = _recurringRestoreAllButton(sectionId);
+  if (restoreAll) restoreAll.disabled = !hasTasks;
+}
+
+function _taskStateFromTaskItem(item) {
+  const title = item.dataset.taskTitle || item.querySelector('.task-title')?.textContent?.trim() || '';
+  return {
+    id: item.dataset.taskId || '',
+    title,
+    project_id: item.dataset.projectId || '',
+    section_id: item.dataset.sectionId || '',
+    parent_id: item.dataset.parentId || '',
+    priority: item.dataset.priority || '4',
+    priority_color: item.dataset.priorityColor || '#555',
+    label_id: item.dataset.labelId || '',
+    label_name: item.dataset.labelName || '',
+    label_color: item.dataset.labelColor || '',
+    due_date: item.dataset.dueDate || '',
+    order: item.dataset.order || '0',
+  };
+}
+
+function _taskStateFromRecurringItem(item) {
+  return {
+    id: item.dataset.taskId || '',
+    title: item.dataset.taskTitle || item.querySelector('.recurring-task-title')?.textContent?.trim() || '',
+    project_id: item.dataset.projectId || '',
+    section_id: item.dataset.sectionId || '',
+    parent_id: item.dataset.parentId || '',
+    priority: item.dataset.priority || '4',
+    priority_color: item.dataset.priorityColor || '#555',
+    label_id: item.dataset.labelId || '',
+    label_name: item.dataset.labelName || '',
+    label_color: item.dataset.labelColor || '',
+    due_date: item.dataset.dueDate || '',
+    order: item.dataset.order || '0',
+  };
+}
+
+function _applyTaskDataset(item, state) {
+  item.dataset.taskId = state.id;
+  item.dataset.order = state.order || '0';
+  item.dataset.taskTitle = state.title || '';
+  item.dataset.projectId = state.project_id || '';
+  item.dataset.sectionId = state.section_id || '';
+  item.dataset.parentId = state.parent_id || '';
+  item.dataset.priority = state.priority || '4';
+  item.dataset.priorityColor = state.priority_color || '#555';
+  item.dataset.labelId = state.label_id || '';
+  item.dataset.labelName = state.label_name || '';
+  item.dataset.labelColor = state.label_color || '';
+  item.dataset.dueDate = state.due_date || '';
+}
+
+function _buildHiddenInput(name, value) {
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = name;
+  input.value = value;
+  return input;
+}
+
+function _buildRecurringActionForm(action, className, label, buttonClass) {
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = action;
+  form.className = className;
+  form.dataset.preserveProjectView = '';
+  form.appendChild(_buildHiddenInput('csrfmiddlewaretoken', getCsrf()));
+  form.appendChild(_buildHiddenInput('back', currentViewBackUrl()));
+
+  const button = document.createElement('button');
+  button.type = 'submit';
+  button.className = buttonClass;
+  button.textContent = label;
+  form.appendChild(button);
+  return form;
+}
+
+function _buildRecurringTaskItem(state) {
+  const item = document.createElement('div');
+  item.className = 'recurring-task-item';
+  _applyTaskDataset(item, state);
+
+  const main = document.createElement('div');
+  main.className = 'recurring-task-main';
+
+  const title = document.createElement('span');
+  title.className = 'recurring-task-title';
+  title.textContent = state.title || '(sans titre)';
+  main.appendChild(title);
+
+  if (state.due_date) {
+    const date = document.createElement('span');
+    date.className = 'task-due-date';
+    date.textContent = _formatDisplayDate(state.due_date);
+    main.appendChild(date);
+  }
+
+  if (state.label_id) {
+    const wrap = document.createElement('div');
+    const badge = document.createElement('span');
+    badge.className = 'task-label-badge';
+    badge.textContent = state.label_name || 'Étiquette';
+    if (state.label_color) {
+      badge.style.background = `${state.label_color}20`;
+      badge.style.color = state.label_color;
+    }
+    wrap.appendChild(badge);
+    main.appendChild(wrap);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'recurring-task-actions';
+  actions.appendChild(_buildRecurringActionForm(`/task/${state.id}/restore/`, 'recurring-restore-form', 'Restaurer', 'btn btn-ghost btn-sm'));
+  actions.appendChild(_buildRecurringActionForm(`/task/${state.id}/delete/`, 'recurring-delete-form', 'Supprimer', 'btn btn-danger btn-sm'));
+
+  item.append(main, actions);
+  return item;
+}
+
+function _buildRestoredTaskItem(state) {
+  const item = document.createElement('div');
+  item.className = 'task-item';
+  item.dataset.href = `/task/${state.id}/`;
+  _applyTaskDataset(item, state);
+
+  const row = document.createElement('div');
+  row.className = 'task-row';
+
+  const completeBtn = document.createElement('button');
+  completeBtn.type = 'button';
+  completeBtn.className = 'task-complete-btn';
+  completeBtn.dataset.taskId = state.id;
+  completeBtn.title = 'Terminer';
+  completeBtn.style.setProperty('--priority-color', state.priority_color || '#555');
+
+  const titleLink = document.createElement('div');
+  titleLink.className = 'task-title-link';
+  const link = document.createElement('a');
+  link.href = `/task/${state.id}/`;
+  const title = document.createElement('span');
+  title.className = 'task-title';
+  title.textContent = state.title || '(sans titre)';
+  link.appendChild(title);
+  if (state.due_date) {
+    const date = document.createElement('span');
+    date.className = 'task-due-date';
+    date.textContent = _formatDisplayDate(state.due_date);
+    link.appendChild(date);
+  }
+  titleLink.appendChild(link);
+
+  if (state.label_id) {
+    const wrap = document.createElement('div');
+    const badge = document.createElement('span');
+    badge.className = 'task-label-badge';
+    badge.textContent = state.label_name || 'Étiquette';
+    if (state.label_color) {
+      badge.style.background = `${state.label_color}20`;
+      badge.style.color = state.label_color;
+    }
+    wrap.appendChild(badge);
+    titleLink.appendChild(wrap);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'task-meta';
+
+  const subtaskBtn = document.createElement('button');
+  subtaskBtn.type = 'button';
+  subtaskBtn.className = 'btn-icon task-add-subtask-btn';
+  subtaskBtn.title = 'Ajouter une sous-tâche';
+  subtaskBtn.textContent = '+';
+  subtaskBtn.addEventListener('click', () => openAddTask(state.project_id, state.section_id, state.id, 'Sous-tâche'));
+
+  const dragHandle = document.createElement('span');
+  dragHandle.className = 'drag-handle';
+  dragHandle.title = 'Déplacer';
+
+  row.append(completeBtn, titleLink, meta, subtaskBtn, dragHandle);
+  item.appendChild(row);
+  return item;
+}
+
+function _addTaskToRecurringModal(taskItem) {
+  if (!taskItem || taskItem.dataset.parentId) return;
+  const sectionCol = taskItem.closest('.section-col[data-recurring="1"]');
+  const sectionId = sectionCol?.dataset.sectionId;
+  const list = sectionId ? _recurringList(sectionId) : null;
+  if (!list) return;
+
+  const state = _taskStateFromTaskItem(taskItem);
+  if (!state.id) return;
+  list.querySelector(`.recurring-task-item[data-task-id="${state.id}"]`)?.remove();
+  _directEmptyMessages(list).forEach(el => el.remove());
+  list.appendChild(_buildRecurringTaskItem(state));
+  _updateRecurringListState(sectionId);
+}
+
+function _restoreTaskInProjectDom(state) {
+  const list = document.getElementById(`taskList-${state.section_id}`);
+  if (!list || list.querySelector(`.task-item[data-task-id="${state.id}"]`)) return;
+  _directEmptyMessages(list).forEach(el => el.remove());
+  list.appendChild(_buildRestoredTaskItem(state));
+}
+
+function _removeRecurringTaskRow(row) {
+  const sectionId = row?.dataset.sectionId;
+  row?.remove();
+  if (sectionId) _updateRecurringListState(sectionId);
+}
+
+function _closeRecurringModalIfEmpty(sectionId) {
+  const modal = document.getElementById(`modalRecurringTasks-${sectionId}`);
+  if (!modal) return;
+  if (!modal.querySelector('.recurring-task-item')) closeModal(modal.id);
+}
+
+async function _submitRecurringForm(form) {
+  if (!navigator.onLine) return false;
+  _preserveCurrentProjectView(form);
+  const fd = new FormData(form);
+  const res = await fetch(form.action, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    body: fd,
+  });
+  if (!res.ok) {
+    showToast('Erreur lors de la mise à jour des tâches récurrentes');
+    return true;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (data.status === 'skipped') {
+    showToast('Modification ignorée : version serveur plus récente');
+    return true;
+  }
+  return true;
+}
+
+document.addEventListener('submit', async e => {
+  const form = e.target;
+  if (!form.matches?.('.recurring-restore-form, .recurring-restore-all-form, .recurring-delete-form')) return;
+  if (e.defaultPrevented) return;
+
+  e.preventDefault();
+  if (form.classList.contains('recurring-delete-form') && !form.getAttribute('onsubmit')) {
+    if (!confirm('Supprimer définitivement cette tâche ?')) return;
+  }
+
+  if (form.classList.contains('recurring-restore-all-form')) {
+    const modal = form.closest('.modal-overlay');
+    const sectionId = modal?.querySelector('.recurring-task-list')?.dataset.sectionId;
+    const rows = [...modal.querySelectorAll('.recurring-task-item')];
+    const states = rows.map(_taskStateFromRecurringItem);
+    if (!(await _submitRecurringForm(form))) return;
+    states.forEach(_restoreTaskInProjectDom);
+    rows.forEach(_removeRecurringTaskRow);
+    if (sectionId) closeModal(`modalRecurringTasks-${sectionId}`);
+    return;
+  }
+
+  const row = form.closest('.recurring-task-item');
+  const state = row ? _taskStateFromRecurringItem(row) : null;
+  const sectionId = row?.dataset.sectionId;
+  if (!(await _submitRecurringForm(form))) return;
+
+  if (form.classList.contains('recurring-restore-form') && state) {
+    _restoreTaskInProjectDom(state);
+  }
+  _removeRecurringTaskRow(row);
+  if (sectionId) _closeRecurringModalIfEmpty(sectionId);
+});
+
 /* ── Complete task ── */
 document.addEventListener('click', async e => {
   const btn = e.target.closest('.task-complete-btn');
@@ -414,6 +736,7 @@ document.addEventListener('click', async e => {
 
   // ── Hors-ligne : optimistic UI + mise en file ──
   if (!navigator.onLine || String(taskId).startsWith('local-')) {
+    if (item && !String(taskId).startsWith('local-')) _addTaskToRecurringModal(item);
     if (window.completeTaskOffline) {
       await window.completeTaskOffline(taskId, item);
     } else {
@@ -430,6 +753,7 @@ document.addEventListener('click', async e => {
   if (res.ok) {
     const item = btn.closest('.task-item');
     if (item) {
+      _addTaskToRecurringModal(item);
       item.style.transition = 'opacity .3s, transform .3s';
       item.style.opacity = '0';
       item.style.transform = 'translateX(20px)';

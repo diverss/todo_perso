@@ -331,7 +331,15 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   padding: 10px 10px 8px;
   border-bottom: 1px solid var(--border);
 }
-.section-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.section-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.section-title-group .section-name { flex: 0 1 auto; }
 .section-recurring-icon {
   color: var(--accent);
   font-size: 14px;
