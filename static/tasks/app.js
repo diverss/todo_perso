@@ -7,6 +7,9 @@ function openModal(id) {
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 }
+function focusModalNameInput(id) {
+  setTimeout(() => document.querySelector(`#${id} input[name="name"]`)?.focus(), 50);
+}
 
 document.addEventListener('click', e => {
   const closeBtn = e.target.closest('.modal-close');
@@ -195,14 +198,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ── Add Project modal ── */
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('addProjectBtn')?.addEventListener('click', () => openModal('modalAddProject'));
+  document.getElementById('addProjectBtn')?.addEventListener('click', () => {
+    openModal('modalAddProject');
+    focusModalNameInput('modalAddProject');
+  });
   bindColorPresets('modalAddProject', 'projectColorInput');
   bindColorPresets('editProjectForm', 'editProjectColor');
 });
 
 /* ── Add Label modal ── */
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('addLabelBtn')?.addEventListener('click', () => openModal('modalAddLabel'));
+  document.getElementById('addLabelBtn')?.addEventListener('click', () => {
+    openModal('modalAddLabel');
+    focusModalNameInput('modalAddLabel');
+  });
   bindColorPresets('modalAddLabel', 'labelColorInput');
 
   document.getElementById('formAddLabel')?.addEventListener('submit', async e => {
