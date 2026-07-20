@@ -30,6 +30,60 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/* ── Textareas resize handle élargi ── */
+const TEXTAREA_RESIZE_ZONE_W = 56;
+const TEXTAREA_RESIZE_ZONE_H = 36;
+
+function _isTextareaResizeZone(e, textarea) {
+  const rect = textarea.getBoundingClientRect();
+  return (
+    e.clientX >= rect.right - TEXTAREA_RESIZE_ZONE_W &&
+    e.clientX <= rect.right &&
+    e.clientY >= rect.bottom - TEXTAREA_RESIZE_ZONE_H &&
+    e.clientY <= rect.bottom
+  );
+}
+
+let _textareaResizeHover = null;
+document.addEventListener('pointermove', e => {
+  const textarea = e.target.closest?.('textarea.form-textarea');
+  const next = textarea && _isTextareaResizeZone(e, textarea) ? textarea : null;
+  if (_textareaResizeHover === next) return;
+  _textareaResizeHover?.classList.remove('resize-grip-hover');
+  next?.classList.add('resize-grip-hover');
+  _textareaResizeHover = next;
+});
+
+document.addEventListener('pointerdown', e => {
+  const textarea = e.target.closest?.('textarea.form-textarea');
+  if (!textarea || !_isTextareaResizeZone(e, textarea)) return;
+
+  e.preventDefault();
+  const startY = e.clientY;
+  const startHeight = textarea.getBoundingClientRect().height;
+  const minHeight = parseFloat(getComputedStyle(textarea).minHeight) || 70;
+
+  textarea.classList.add('is-resizing');
+  textarea.setPointerCapture?.(e.pointerId);
+
+  function resize(moveEvt) {
+    moveEvt.preventDefault();
+    textarea.style.height = `${Math.max(minHeight, startHeight + moveEvt.clientY - startY)}px`;
+  }
+
+  function stop() {
+    textarea.classList.remove('is-resizing');
+    textarea.releasePointerCapture?.(e.pointerId);
+    document.removeEventListener('pointermove', resize);
+    document.removeEventListener('pointerup', stop);
+    document.removeEventListener('pointercancel', stop);
+  }
+
+  document.addEventListener('pointermove', resize);
+  document.addEventListener('pointerup', stop);
+  document.addEventListener('pointercancel', stop);
+});
+
 /* ── Dropdowns ── */
 function toggleDropdown(id) {
   const menu = document.getElementById(id);
