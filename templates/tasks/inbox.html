@@ -24,6 +24,7 @@
        data-label-id="{{ task.label_id|default:'' }}"
        data-label-name="{% if task.label %}{{ task.label.name }}{% endif %}"
        data-label-color="{% if task.label %}{{ task.label.color }}{% endif %}"
+       data-due-date="{{ task.due_date|date:'Y-m-d' }}"
        data-href="{% url 'task_detail' task.pk %}">
     <div class="task-row">
       <button class="task-complete-btn"

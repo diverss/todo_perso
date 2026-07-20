@@ -142,6 +142,11 @@ function _priorityColor(priority) {
   return { 1: '#db4035', 2: '#ff9933', 3: '#4073ff', 4: '#555' }[parseInt(priority)] || '#555';
 }
 
+function _formatDueDate(value) {
+  const match = _stringId(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : _stringId(value);
+}
+
 function _currentPathWithSearch() {
   return `${window.location.pathname}${window.location.search}`;
 }
@@ -181,6 +186,7 @@ function _taskStateFromElement(item) {
     label_id: _blankToNull(item.dataset.labelId),
     label_name: item.dataset.labelName || '',
     label_color: item.dataset.labelColor || '',
+    due_date: item.dataset.dueDate || '',
     order: parseInt(item.dataset.order || '0'),
     completed: false,
   };
@@ -202,6 +208,7 @@ function _taskStateFromTaskForm(form, body, taskId) {
     label_id: _blankToNull(body.label_id),
     label_name: labelOpt?.dataset.labelName || (labelOpt?.value ? labelOpt.textContent.trim() : ''),
     label_color: labelOpt?.dataset.labelColor || '',
+    due_date: body.due_date || '',
     completed: body.completed === '1',
   };
 }
@@ -233,6 +240,7 @@ function _setItemDataset(item, state) {
   item.dataset.labelId = _stringId(state.label_id);
   item.dataset.labelName = state.label_name || '';
   item.dataset.labelColor = state.label_color || '';
+  item.dataset.dueDate = state.due_date || '';
   item.dataset.order = _stringId(state.order || 0);
   if (_isServerTaskId(state.id)) {
     item.dataset.href = `/task/${state.id}/`;
@@ -278,6 +286,22 @@ function _updateLabelBadge(titleLink, state) {
   }
 }
 
+function _updateDueDateBadge(titleLink, state) {
+  const existing = titleLink.querySelector('.task-due-date');
+  if (!state.due_date) {
+    existing?.remove();
+    return;
+  }
+
+  const badge = existing || document.createElement('span');
+  badge.className = 'task-due-date';
+  badge.textContent = _formatDueDate(state.due_date);
+  if (!existing) {
+    const target = titleLink.querySelector('a') || titleLink;
+    target.appendChild(badge);
+  }
+}
+
 function _updateTaskLocation(item, state) {
   const locationText = item.querySelector('.task-location-text');
   if (!locationText) return;
@@ -308,6 +332,7 @@ function _updateTaskItemFromState(item, state) {
   if (titleLink) {
     _ensurePendingBadge(titleLink);
     _updateLabelBadge(titleLink, state);
+    _updateDueDateBadge(titleLink, state);
   }
   _updateTaskLocation(item, state);
 }
@@ -346,6 +371,7 @@ function _buildTaskItem(state) {
 
   _ensurePendingBadge(titleLink);
   _updateLabelBadge(titleLink, state);
+  _updateDueDateBadge(titleLink, state);
 
   row.appendChild(completeBtn);
   row.appendChild(titleLink);
@@ -391,6 +417,8 @@ function _applyStateToTaskDetail(state) {
   form.querySelector('[name="priority"]').value = _stringId(state.priority || '4');
   form.querySelector('[name="label_id"]').value = _stringId(state.label_id);
   form.querySelector('[name="parent_id"]').value = _stringId(state.parent_id);
+  const dueDateInput = form.querySelector('[name="due_date"]');
+  if (dueDateInput) dueDateInput.value = state.due_date || '';
 }
 
 function _applyTaskStateToDom(state) {

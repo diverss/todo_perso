@@ -107,6 +107,11 @@
         </select>
       </div>
 
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input type="date" name="due_date" class="form-input" value="{{ task.due_date|date:'Y-m-d' }}">
+      </div>
+
       <div class="form-actions">
         <button type="submit" form="deleteTaskForm" class="btn btn-danger">Supprimer</button>
         <button type="button" class="btn btn-ghost desktop-only" onclick="openExportObsidian()" style="border:1.5px solid #7c3aed;color:#7c3aed">Exporter vers Obsidian</button>
@@ -154,6 +159,7 @@
            data-label-id="{{ sub.label_id|default:'' }}"
            data-label-name="{% if sub.label %}{{ sub.label.name }}{% endif %}"
            data-label-color="{% if sub.label %}{{ sub.label.color }}{% endif %}"
+           data-due-date="{{ sub.due_date|date:'Y-m-d' }}"
            data-href="{% url 'task_detail' sub.pk %}">
         <div class="task-row">
           <button class="task-complete-btn"

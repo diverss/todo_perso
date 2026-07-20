@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.http import Http404
@@ -7,12 +7,14 @@ from django.urls import resolve
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Project, Section, Task
+from .models import Label, Project, Section, Task
 from .views import (
+    label_view,
     project_view,
     section_favorite_reorder,
     section_toggle_favorite,
     search_view,
+    task_create,
     task_complete,
     task_delete,
     task_detail,
@@ -293,6 +295,75 @@ class AuthFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], '/')
         self.assertEqual(int(self.client.session['_auth_user_id']), self.user.pk)
+
+
+class TaskDueDateTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('user-date')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+        self.label = Label.objects.create(user=self.user, name='Courses')
+
+    def test_task_create_saves_optional_due_date(self):
+        request = with_user(self.factory.post('/task/create/', data={
+            'title': 'Acheter du pain',
+            'description': '',
+            'priority': 4,
+            'project_id': self.project.pk,
+            'section_id': '',
+            'parent_id': '',
+            'label_id': '',
+            'due_date': '2026-08-05',
+        }), self.user)
+
+        task_create(request)
+
+        task = Task.objects.get(title='Acheter du pain')
+        self.assertEqual(task.due_date, date(2026, 8, 5))
+
+    def test_task_edit_updates_and_clears_due_date(self):
+        task = Task.objects.create(
+            user=self.user,
+            title='Acheter du pain',
+            project=self.project,
+            due_date=date(2026, 8, 5),
+        )
+
+        request = with_user(self.factory.post(f'/task/{task.pk}/edit/', data={
+            'title': task.title,
+            'description': '',
+            'priority': task.priority,
+            'project_id': self.project.pk,
+            'section_id': '',
+            'parent_id': '',
+            'label_id': '',
+            'due_date': '',
+        }), self.user)
+        task_edit(request, task.pk)
+
+        task.refresh_from_db()
+        self.assertIsNone(task.due_date)
+
+    @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+    def test_project_and_label_views_render_due_date_after_title(self):
+        Task.objects.create(
+            user=self.user,
+            title='Acheter du pain',
+            project=self.project,
+            label=self.label,
+            due_date=date(2026, 8, 5),
+        )
+
+        project_request = with_user(self.factory.get(f'/project/{self.project.pk}/'), self.user)
+        project_request.resolver_match = resolve(f'/project/{self.project.pk}/')
+        project_response = project_view(project_request, self.project.pk)
+
+        label_request = with_user(self.factory.get(f'/label/{self.label.pk}/'), self.user)
+        label_request.resolver_match = resolve(f'/label/{self.label.pk}/')
+        label_response = label_view(label_request, self.label.pk)
+
+        self.assertContains(project_response, '<span class="task-due-date">05/08/2026</span>', html=True)
+        self.assertContains(label_response, '<span class="task-due-date">05/08/2026</span>', html=True)
 
 
 class OfflineTaskConflictTests(TestCase):

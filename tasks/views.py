@@ -8,6 +8,7 @@ from django.contrib.auth import authenticate, login as auth_login, logout as aut
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.db.models import Max, Q
 from django.conf import settings as django_settings
 
@@ -115,6 +116,12 @@ def _offline_operation_datetime(request):
 
 def _operation_datetime(request):
     return _offline_operation_datetime(request) or timezone.now()
+
+
+def _parse_due_date(value):
+    if not value:
+        return None
+    return parse_date(value)
 
 
 def _is_stale_task_operation(request, task):
@@ -343,6 +350,7 @@ def task_create(request):
         description=request.POST.get('description', ''),
         priority=priority,
         label=label,
+        due_date=_parse_due_date(request.POST.get('due_date')),
         project=project,
         section=section,
         parent=parent,
@@ -416,6 +424,7 @@ def task_edit(request, task_id):
     task.title = request.POST.get('title', task.title).strip()
     task.description = request.POST.get('description', task.description)
     task.priority = int(request.POST.get('priority', task.priority))
+    task.due_date = _parse_due_date(request.POST.get('due_date'))
 
     label_id = request.POST.get('label_id') or None
     task.label = get_object_or_404(Label, pk=label_id, user=request.user) if label_id else None
@@ -598,7 +607,7 @@ def app_revision(request):
         f'p:{_revision_rows(Project.objects.filter(user=user), "name", "color", "order", "is_inbox")}',
         f's:{_revision_rows(Section.objects.filter(user=user), "name", "project_id", "order", "is_favorite", "favorite_order")}',
         f'l:{_revision_rows(Label.objects.filter(user=user), "name", "color", "order")}',
-        f't:{_revision_rows(Task.objects.filter(user=user), "project_id", "section_id", "parent_id", "label_id", "priority", "order", "label_order", "completed", "updated_at")}',
+        f't:{_revision_rows(Task.objects.filter(user=user), "project_id", "section_id", "parent_id", "label_id", "due_date", "priority", "order", "label_order", "completed", "updated_at")}',
         f'i:{_revision_rows(TaskImage.objects.filter(task__user=user), "task_id", "uploaded_at")}',
     ]
 

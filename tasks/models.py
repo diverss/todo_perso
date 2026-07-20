@@ -69,6 +69,7 @@ class Task(models.Model):
     description = models.TextField(blank=True)
     priority = models.PositiveSmallIntegerField(choices=PRIORITY_CHOICES, default=4)
     label = models.ForeignKey(Label, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
+    due_date = models.DateField(null=True, blank=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     section = models.ForeignKey(Section, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')

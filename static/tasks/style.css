@@ -406,6 +406,12 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 
 .task-title-link { flex: 1; }
 .task-title { line-height: 1.4; word-break: break-word; }
+.task-due-date {
+  margin-left: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .task-meta { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; margin-top: 1px; }
 .task-add-subtask-btn { opacity: 0; font-size: 14px; margin-top: 1px; }
 .drag-handle { margin-top: 1px; }
