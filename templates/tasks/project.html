@@ -49,14 +49,12 @@
 </div>
 
 <!-- Tasks without section (above the board, full width) -->
-{% if tasks_no_section %}
-<div class="no-section-tasks">
+<div class="no-section-tasks" {% if not tasks_no_section %}hidden{% endif %}>
   <div class="task-list-container" id="taskList-null"
        data-project="{{ project.pk }}" data-section="">
     {% include 'tasks/task_list.html' with tasks=tasks_no_section %}
   </div>
 </div>
-{% endif %}
 
 {% if sections %}
 <!-- Section tabs (mobile only) -->

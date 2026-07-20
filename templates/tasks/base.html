@@ -318,7 +318,7 @@
           <select name="label_id" class="form-input form-select">
             <option value="">— Aucune —</option>
             {% for l in labels %}
-            <option value="{{ l.pk }}">{{ l.name }}</option>
+            <option value="{{ l.pk }}" data-label-name="{{ l.name }}" data-label-color="{{ l.color }}">{{ l.name }}</option>
             {% endfor %}
           </select>
         </div>

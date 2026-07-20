@@ -1,5 +1,6 @@
 import os
 from django.db import models
+from django.utils import timezone
 
 
 class Label(models.Model):
@@ -62,6 +63,7 @@ class Task(models.Model):
     completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ['order', 'created_at']

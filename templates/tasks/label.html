@@ -11,7 +11,21 @@
 
 <div class="label-tasks-list" id="labelTaskList" data-label-id="{{ label.pk }}">
   {% for task in tasks %}
-  <div class="task-item" data-task-id="{{ task.pk }}" data-href="{% url 'task_detail' task.pk %}?back={% url 'label' label.pk %}">
+  <div class="task-item"
+       data-task-id="{{ task.pk }}"
+       data-order="{{ task.label_order|default:task.order }}"
+       data-task-title="{{ task.title }}"
+       data-project-id="{{ task.project_id }}"
+       data-project-name="{{ task.project.name }}"
+       data-section-id="{{ task.section_id|default:'' }}"
+       data-section-name="{% if task.section %}{{ task.section.name }}{% endif %}"
+       data-parent-id="{{ task.parent_id|default:'' }}"
+       data-priority="{{ task.priority }}"
+       data-priority-color="{{ task.priority_color|default:'#555' }}"
+       data-label-id="{{ task.label_id|default:'' }}"
+       data-label-name="{% if task.label %}{{ task.label.name }}{% endif %}"
+       data-label-color="{% if task.label %}{{ task.label.color }}{% endif %}"
+       data-href="{% url 'task_detail' task.pk %}?back={% url 'label' label.pk %}">
     <div class="task-row">
       <button class="task-complete-btn"
               data-task-id="{{ task.pk }}"

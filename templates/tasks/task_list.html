@@ -3,6 +3,15 @@
 <div class="task-item"
      data-task-id="{{ task.pk }}"
      data-order="{{ task.order }}"
+     data-task-title="{{ task.title }}"
+     data-project-id="{{ task.project_id }}"
+     data-section-id="{{ task.section_id|default:'' }}"
+     data-parent-id="{{ task.parent_id|default:'' }}"
+     data-priority="{{ task.priority }}"
+     data-priority-color="{{ task.priority_color|default:'#555' }}"
+     data-label-id="{{ task.label_id|default:'' }}"
+     data-label-name="{% if task.label %}{{ task.label.name }}{% endif %}"
+     data-label-color="{% if task.label %}{{ task.label.color }}{% endif %}"
      data-href="{% url 'task_detail' task.pk %}?back={% url 'project' task.project.pk %}{% if task.section %}%3Fsection={{ task.section.pk }}{% endif %}">
   <div class="task-row">
     <button class="task-complete-btn"

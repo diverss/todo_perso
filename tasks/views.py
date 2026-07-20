@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime, timezone as dt_timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST, require_http_methods
@@ -82,6 +83,42 @@ def _move_section_to_end_if_empty(section_id):
 
     if changed:
         Section.objects.bulk_update(changed, ['order'])
+
+
+def _as_int_id(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _offline_operation_datetime(request):
+    raw = request.POST.get('offline_ts') or request.headers.get('X-Offline-Ts')
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value > 10_000_000_000:
+        value = value / 1000
+    try:
+        return datetime.fromtimestamp(value, tz=dt_timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _operation_datetime(request):
+    return _offline_operation_datetime(request) or timezone.now()
+
+
+def _is_stale_task_operation(request, task):
+    op_dt = _offline_operation_datetime(request)
+    return bool(op_dt and task.updated_at and op_dt < task.updated_at)
+
+
+def _stale_task_response():
+    return JsonResponse({'status': 'skipped', 'reason': 'newer_server_version'})
 
 
 def project_view(request, project_id):
@@ -265,6 +302,8 @@ def task_create(request):
     section = get_object_or_404(Section, pk=section_id) if section_id else None
     parent = get_object_or_404(Task, pk=parent_id) if parent_id else None
     label = get_object_or_404(Label, pk=label_id) if label_id else None
+    op_dt = _operation_datetime(request)
+    completed = request.POST.get('completed') == '1'
 
     qs = Task.objects.filter(project=project, section=section, parent=parent)
     order = qs.count()
@@ -278,6 +317,9 @@ def task_create(request):
         section=section,
         parent=parent,
         order=order,
+        completed=completed,
+        completed_at=op_dt if completed else None,
+        updated_at=op_dt,
     )
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -332,9 +374,13 @@ def task_detail(request, task_id):
 @require_POST
 def task_edit(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
+    if _is_stale_task_operation(request, task):
+        return _stale_task_response()
+
     old_section_id = task.section_id
     old_parent_id = task.parent_id
     old_completed = task.completed
+    op_dt = _operation_datetime(request)
 
     task.title = request.POST.get('title', task.title).strip()
     task.description = request.POST.get('description', task.description)
@@ -353,6 +399,7 @@ def task_edit(request, task_id):
     parent_id = request.POST.get('parent_id') or None
     task.parent = get_object_or_404(Task, pk=parent_id) if parent_id else None
 
+    task.updated_at = op_dt
     task.save()
     if old_section_id and old_parent_id is None and not old_completed:
         _move_section_to_end_if_empty(old_section_id)
@@ -368,12 +415,17 @@ def task_edit(request, task_id):
 @require_POST
 def task_complete(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
+    if _is_stale_task_operation(request, task):
+        return _stale_task_response()
+
     old_section_id = task.section_id if task.parent_id is None else None
+    op_dt = _operation_datetime(request)
 
     task.completed = True
-    task.completed_at = timezone.now()
+    task.completed_at = op_dt
+    task.updated_at = op_dt
     task.save()
-    task.subtasks.filter(completed=False).update(completed=True, completed_at=timezone.now())
+    task.subtasks.filter(completed=False).update(completed=True, completed_at=op_dt, updated_at=op_dt)
     _move_section_to_end_if_empty(old_section_id)
     return JsonResponse({'status': 'ok'})
 
@@ -381,6 +433,9 @@ def task_complete(request, task_id):
 @require_POST
 def task_delete(request, task_id):
     task = get_object_or_404(Task, pk=task_id)
+    if _is_stale_task_operation(request, task):
+        return _stale_task_response()
+
     project_id = task.project.pk
     parent_id = task.parent.pk if task.parent else None
     old_section_id = task.section_id if task.parent_id is None and not task.completed else None
@@ -399,18 +454,32 @@ def task_delete(request, task_id):
 @require_POST
 def task_reorder(request):
     data = json.loads(request.body)
-    task_ids = [item['id'] for item in data]
+    op_dt = _operation_datetime(request)
+    task_ids = [
+        task_id
+        for task_id in (_as_int_id(item.get('id')) for item in data)
+        if task_id is not None
+    ]
     old_tasks = {
         task.pk: task
         for task in Task.objects.filter(pk__in=task_ids)
     }
     sections_to_check = set()
+    applied = 0
+    skipped = 0
 
     # data = [{id: x, order: y, section_id: z|null, parent_id: z|null}, ...]
     for item in data:
-        old_task = old_tasks.get(item['id'])
-        new_section_id = item.get('section_id')
-        new_parent_id = item.get('parent_id')
+        task_id = _as_int_id(item.get('id'))
+        old_task = old_tasks.get(task_id)
+        if not old_task:
+            continue
+        if _is_stale_task_operation(request, old_task):
+            skipped += 1
+            continue
+
+        new_section_id = _as_int_id(item.get('section_id'))
+        new_parent_id = _as_int_id(item.get('parent_id'))
         if (
             old_task
             and old_task.section_id
@@ -420,16 +489,18 @@ def task_reorder(request):
         ):
             sections_to_check.add(old_task.section_id)
 
-        Task.objects.filter(pk=item['id']).update(
+        Task.objects.filter(pk=task_id).update(
             order=item['order'],
             section_id=new_section_id,
             parent_id=new_parent_id,
+            updated_at=op_dt,
         )
+        applied += 1
 
     for section_id in sections_to_check:
         _move_section_to_end_if_empty(section_id)
 
-    return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'ok', 'applied': applied, 'skipped': skipped})
 
 
 # --- Labels CRUD ---
@@ -582,9 +653,31 @@ def _media_size():
 
 @require_POST
 def label_task_reorder(request, label_id):
-    for item in json.loads(request.body):
-        Task.objects.filter(pk=item['id']).update(label_order=item['order'])
-    return JsonResponse({'status': 'ok'})
+    data = json.loads(request.body)
+    op_dt = _operation_datetime(request)
+    task_ids = [
+        task_id
+        for task_id in (_as_int_id(item.get('id')) for item in data)
+        if task_id is not None
+    ]
+    tasks_by_id = {
+        task.pk: task
+        for task in Task.objects.filter(pk__in=task_ids)
+    }
+    applied = 0
+    skipped = 0
+
+    for item in data:
+        task_id = _as_int_id(item.get('id'))
+        task = tasks_by_id.get(task_id)
+        if not task:
+            continue
+        if _is_stale_task_operation(request, task):
+            skipped += 1
+            continue
+        Task.objects.filter(pk=task_id).update(label_order=item['order'], updated_at=op_dt)
+        applied += 1
+    return JsonResponse({'status': 'ok', 'applied': applied, 'skipped': skipped})
 
 
 @require_POST

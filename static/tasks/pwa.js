@@ -10,7 +10,7 @@
  *
  * API publique utilisée par app.js :
  *   getCsrf()                           → token CSRF cookie
- *   queueOfflineOp(url, type, body)     → ajoute à la file
+ *   queueOfflineOp(url, type, body, label, meta) → ajoute à la file
  *   window.isOfflineQueueEmpty()        → bool
  */
 
@@ -28,7 +28,8 @@ window.getCsrf = getCsrf;
  * ════════════════════════════════════════════ */
 const IDB_NAME  = 'todo-offline';
 const IDB_STORE = 'pending';
-const IDB_VER   = 1;
+const IDB_TASK_STATE_STORE = 'task_state';
+const IDB_VER   = 2;
 
 function _openDB() {
   return new Promise((resolve, reject) => {
@@ -38,51 +39,59 @@ function _openDB() {
       if (!db.objectStoreNames.contains(IDB_STORE)) {
         db.createObjectStore(IDB_STORE, { keyPath: 'id', autoIncrement: true });
       }
+      if (!db.objectStoreNames.contains(IDB_TASK_STATE_STORE)) {
+        db.createObjectStore(IDB_TASK_STATE_STORE, { keyPath: 'id' });
+      }
     };
     req.onsuccess = e => resolve(e.target.result);
     req.onerror  = e => reject(e.target.error);
   });
 }
 
-async function _idbAdd(op) {
-  const db = await _openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    const store = tx.objectStore(IDB_STORE);
-    const req = store.add(op);
+function _withStore(storeName, mode, cb) {
+  return _openDB().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
+    const req = cb(store);
     req.onsuccess = () => res(req.result);
-    req.onerror   = () => rej(req.error);
-  });
+    req.onerror = () => rej(req.error);
+  }));
+}
+
+async function _idbAdd(op) {
+  return _withStore(IDB_STORE, 'readwrite', store => store.add(op));
 }
 
 async function _idbGetAll() {
-  const db = await _openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(IDB_STORE, 'readonly');
-    const req = tx.objectStore(IDB_STORE).getAll();
-    req.onsuccess = () => res(req.result);
-    req.onerror   = () => rej(req.error);
-  });
+  return _withStore(IDB_STORE, 'readonly', store => store.getAll());
+}
+
+async function _idbPutPending(op) {
+  return _withStore(IDB_STORE, 'readwrite', store => store.put(op));
 }
 
 async function _idbDelete(id) {
-  const db = await _openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    const req = tx.objectStore(IDB_STORE).delete(id);
-    req.onsuccess = () => res();
-    req.onerror   = () => rej(req.error);
-  });
+  return _withStore(IDB_STORE, 'readwrite', store => store.delete(id));
 }
 
 async function _idbCount() {
-  const db = await _openDB();
-  return new Promise((res, rej) => {
-    const tx = db.transaction(IDB_STORE, 'readonly');
-    const req = tx.objectStore(IDB_STORE).count();
-    req.onsuccess = () => res(req.result);
-    req.onerror   = () => rej(req.error);
-  });
+  return _withStore(IDB_STORE, 'readonly', store => store.count());
+}
+
+async function _idbGetAllTaskStates() {
+  return _withStore(IDB_TASK_STATE_STORE, 'readonly', store => store.getAll());
+}
+
+async function _idbGetTaskState(id) {
+  return _withStore(IDB_TASK_STATE_STORE, 'readonly', store => store.get(String(id)));
+}
+
+async function _idbPutTaskState(state) {
+  return _withStore(IDB_TASK_STATE_STORE, 'readwrite', store => store.put({ ...state, id: String(state.id) }));
+}
+
+async function _idbDeleteTaskState(id) {
+  return _withStore(IDB_TASK_STATE_STORE, 'readwrite', store => store.delete(String(id)));
 }
 
 /* ════════════════════════════════════════════
@@ -95,15 +104,499 @@ async function _idbCount() {
  * @param {'form'|'json'} type  - form = FormData, json = JSON body
  * @param {object} body         - données sérialisables (sans csrfmiddlewaretoken)
  * @param {string} [label]      - description lisible pour les logs
+ * @param {object} [meta]       - données internes, ex. tâche locale liée
  */
-async function queueOfflineOp(url, type, body, label) {
-  await _idbAdd({ url, type, body, label: label || url, ts: Date.now() });
+async function queueOfflineOp(url, type, body, label, meta) {
+  const op = { url, type, body, label: label || url, ts: Date.now(), meta: meta || {} };
+  op.id = await _idbAdd(op);
   await _updatePendingUI();
   showToast('Hors ligne — modification sauvegardée, sera synchronisée à la reconnexion.');
+  return op;
 }
 window.queueOfflineOp = queueOfflineOp;
 
 window.isOfflineQueueEmpty = async () => (await _idbCount()) === 0;
+
+/* ════════════════════════════════════════════
+ *  État local des tâches
+ * ════════════════════════════════════════════ */
+function _stringId(value) {
+  return value == null ? '' : String(value);
+}
+
+function _blankToNull(value) {
+  const str = _stringId(value);
+  return str ? str : null;
+}
+
+function _isLocalTaskId(id) {
+  return _stringId(id).startsWith('local-');
+}
+
+function _isServerTaskId(id) {
+  return /^\d+$/.test(_stringId(id));
+}
+
+function _priorityColor(priority) {
+  return { 1: '#db4035', 2: '#ff9933', 3: '#4073ff', 4: '#555' }[parseInt(priority)] || '#555';
+}
+
+function _currentPathWithSearch() {
+  return `${window.location.pathname}${window.location.search}`;
+}
+
+function _findTaskItems(taskId) {
+  const id = _stringId(taskId);
+  return [...document.querySelectorAll('.task-item[data-task-id]')]
+    .filter(item => _stringId(item.dataset.taskId) === id);
+}
+
+function _closestTaskContainer(item) {
+  return item.closest('.task-list-container, #inboxTaskList, #labelTaskList');
+}
+
+function _selectedOption(form, name) {
+  const el = form.querySelector(`[name="${name}"]`);
+  return el?.options?.[el.selectedIndex] || null;
+}
+
+function _selectedOptionText(form, name) {
+  const opt = _selectedOption(form, name);
+  return opt && opt.value ? opt.textContent.trim() : '';
+}
+
+function _taskStateFromElement(item) {
+  const title = item.dataset.taskTitle || item.querySelector('.task-title')?.textContent?.trim() || '';
+  return {
+    id: _stringId(item.dataset.taskId),
+    title,
+    project_id: _blankToNull(item.dataset.projectId),
+    project_name: item.dataset.projectName || '',
+    section_id: _blankToNull(item.dataset.sectionId),
+    section_name: item.dataset.sectionName || '',
+    parent_id: _blankToNull(item.dataset.parentId),
+    priority: item.dataset.priority || '4',
+    priority_color: item.dataset.priorityColor || _priorityColor(item.dataset.priority),
+    label_id: _blankToNull(item.dataset.labelId),
+    label_name: item.dataset.labelName || '',
+    label_color: item.dataset.labelColor || '',
+    order: parseInt(item.dataset.order || '0'),
+    completed: false,
+  };
+}
+
+function _taskStateFromTaskForm(form, body, taskId) {
+  const labelOpt = _selectedOption(form, 'label_id');
+  return {
+    id: _stringId(taskId),
+    title: body.title || '',
+    description: body.description || '',
+    project_id: _blankToNull(body.project_id),
+    project_name: _selectedOptionText(form, 'project_id'),
+    section_id: _blankToNull(body.section_id),
+    section_name: _selectedOptionText(form, 'section_id'),
+    parent_id: _blankToNull(body.parent_id),
+    priority: body.priority || '4',
+    priority_color: _priorityColor(body.priority || '4'),
+    label_id: _blankToNull(body.label_id),
+    label_name: labelOpt?.dataset.labelName || (labelOpt?.value ? labelOpt.textContent.trim() : ''),
+    label_color: labelOpt?.dataset.labelColor || '',
+    completed: body.completed === '1',
+  };
+}
+
+async function _mergeTaskState(taskId, patch, base) {
+  const id = _stringId(taskId);
+  const existing = await _idbGetTaskState(id);
+  const state = {
+    ...(base || {}),
+    ...(existing || {}),
+    ...patch,
+    id,
+    localUpdatedAt: patch.localUpdatedAt || Date.now(),
+  };
+  await _idbPutTaskState(state);
+  return state;
+}
+
+function _setItemDataset(item, state) {
+  item.dataset.taskId = _stringId(state.id);
+  item.dataset.taskTitle = state.title || '';
+  item.dataset.projectId = _stringId(state.project_id);
+  item.dataset.projectName = state.project_name || '';
+  item.dataset.sectionId = _stringId(state.section_id);
+  item.dataset.sectionName = state.section_name || '';
+  item.dataset.parentId = _stringId(state.parent_id);
+  item.dataset.priority = _stringId(state.priority || '4');
+  item.dataset.priorityColor = state.priority_color || _priorityColor(state.priority);
+  item.dataset.labelId = _stringId(state.label_id);
+  item.dataset.labelName = state.label_name || '';
+  item.dataset.labelColor = state.label_color || '';
+  item.dataset.order = _stringId(state.order || 0);
+  if (_isServerTaskId(state.id)) {
+    item.dataset.href = `/task/${state.id}/`;
+  } else {
+    delete item.dataset.href;
+  }
+}
+
+function _ensurePendingBadge(titleLink) {
+  let hints = titleLink.querySelector('.task-local-hints');
+  if (!hints) {
+    hints = document.createElement('div');
+    hints.className = 'task-hints task-local-hints';
+    titleLink.appendChild(hints);
+  }
+  let badge = hints.querySelector('.task-sync-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'task-sync-badge';
+    badge.textContent = 'en attente';
+    hints.appendChild(badge);
+  }
+}
+
+function _updateLabelBadge(titleLink, state) {
+  const existing = titleLink.querySelector('.task-label-badge');
+  if (!state.label_id) {
+    existing?.closest('div')?.remove();
+    return;
+  }
+
+  const wrap = existing?.closest('div') || document.createElement('div');
+  const badge = existing || document.createElement('span');
+  badge.className = 'task-label-badge';
+  badge.textContent = state.label_name || 'Étiquette';
+  if (state.label_color) {
+    badge.style.background = `${state.label_color}20`;
+    badge.style.color = state.label_color;
+  }
+  if (!existing) {
+    wrap.appendChild(badge);
+    titleLink.appendChild(wrap);
+  }
+}
+
+function _updateTaskLocation(item, state) {
+  const locationText = item.querySelector('.task-location-text');
+  if (!locationText) return;
+  const parts = [state.project_name, state.section_name].filter(Boolean);
+  locationText.textContent = parts.join(' / ');
+}
+
+function _updateTaskItemFromState(item, state) {
+  _setItemDataset(item, state);
+  item.classList.add('task-item-pending');
+
+  const completeBtn = item.querySelector('.task-complete-btn');
+  if (completeBtn) {
+    completeBtn.dataset.taskId = _stringId(state.id);
+    completeBtn.style.setProperty('--priority-color', state.priority_color || _priorityColor(state.priority));
+  }
+
+  const titleEl = item.querySelector('.task-title');
+  if (titleEl) titleEl.textContent = state.title || '(sans titre)';
+
+  const link = item.querySelector('a[href*="/task/"]');
+  if (link) {
+    if (_isServerTaskId(state.id)) link.href = `/task/${state.id}/`;
+    else link.removeAttribute('href');
+  }
+
+  const titleLink = item.querySelector('.task-title-link');
+  if (titleLink) {
+    _ensurePendingBadge(titleLink);
+    _updateLabelBadge(titleLink, state);
+  }
+  _updateTaskLocation(item, state);
+}
+
+function _buildTaskItem(state) {
+  const item = document.createElement('div');
+  item.className = 'task-item task-item-pending';
+  _setItemDataset(item, state);
+
+  const row = document.createElement('div');
+  row.className = 'task-row';
+
+  const completeBtn = document.createElement('button');
+  completeBtn.type = 'button';
+  completeBtn.className = 'task-complete-btn';
+  completeBtn.dataset.taskId = _stringId(state.id);
+  completeBtn.dataset.redirect = _currentPathWithSearch();
+  completeBtn.title = 'Terminer';
+  completeBtn.style.setProperty('--priority-color', state.priority_color || _priorityColor(state.priority));
+
+  const titleLink = document.createElement('div');
+  titleLink.className = 'task-title-link';
+
+  const title = document.createElement('span');
+  title.className = 'task-title';
+  title.textContent = state.title || '(sans titre)';
+
+  if (_isServerTaskId(state.id)) {
+    const a = document.createElement('a');
+    a.href = `/task/${state.id}/`;
+    a.appendChild(title);
+    titleLink.appendChild(a);
+  } else {
+    titleLink.appendChild(title);
+  }
+
+  _ensurePendingBadge(titleLink);
+  _updateLabelBadge(titleLink, state);
+
+  row.appendChild(completeBtn);
+  row.appendChild(titleLink);
+  item.appendChild(row);
+  return item;
+}
+
+function _containerAcceptsTaskState(container, state) {
+  if (!container || state.completed || state.deleted) return false;
+
+  if (container.id === 'labelTaskList') {
+    return _stringId(state.label_id) === _stringId(container.dataset.labelId) && !_stringId(state.parent_id);
+  }
+
+  const projectId = container.dataset.project;
+  if (!projectId) return false;
+  if (_stringId(state.project_id) !== _stringId(projectId)) return false;
+
+  const sectionId = container.dataset.section || '';
+  const parentId = container.dataset.parent || '';
+  return _stringId(state.section_id) === sectionId && _stringId(state.parent_id) === parentId;
+}
+
+function _findContainerForTaskState(state) {
+  return [...document.querySelectorAll('.task-list-container, #inboxTaskList, #labelTaskList')]
+    .find(container => _containerAcceptsTaskState(container, state)) || null;
+}
+
+function _removeEmptyMessages(container) {
+  container.querySelectorAll(':scope > .task-list-empty').forEach(el => el.remove());
+  const hiddenParent = container.closest('[hidden]');
+  if (hiddenParent) hiddenParent.hidden = false;
+}
+
+function _applyStateToTaskDetail(state) {
+  const form = document.getElementById('taskEditForm');
+  if (!form || !form.action.includes(`/task/${state.id}/edit/`)) return;
+
+  form.querySelector('[name="title"]').value = state.title || '';
+  form.querySelector('[name="description"]').value = state.description || '';
+  form.querySelector('[name="project_id"]').value = _stringId(state.project_id);
+  form.querySelector('[name="section_id"]').value = _stringId(state.section_id);
+  form.querySelector('[name="priority"]').value = _stringId(state.priority || '4');
+  form.querySelector('[name="label_id"]').value = _stringId(state.label_id);
+  form.querySelector('[name="parent_id"]').value = _stringId(state.parent_id);
+}
+
+function _applyTaskStateToDom(state) {
+  if (state.completed || state.deleted) {
+    _findTaskItems(state.id).forEach(item => item.remove());
+    return;
+  }
+
+  _applyStateToTaskDetail(state);
+
+  const target = _findContainerForTaskState(state);
+  const items = _findTaskItems(state.id);
+  let itemInTarget = null;
+
+  for (const item of items) {
+    const container = _closestTaskContainer(item);
+    if (target && container === target) {
+      itemInTarget = item;
+      _updateTaskItemFromState(item, state);
+    } else if (container && !_containerAcceptsTaskState(container, state)) {
+      item.remove();
+    } else {
+      _updateTaskItemFromState(item, state);
+    }
+  }
+
+  if (target && !itemInTarget) {
+    _removeEmptyMessages(target);
+    target.appendChild(_buildTaskItem(state));
+  }
+}
+
+async function applyLocalTaskStates() {
+  const states = (await _idbGetAllTaskStates())
+    .sort((a, b) => (a.localUpdatedAt || 0) - (b.localUpdatedAt || 0));
+  for (const state of states) _applyTaskStateToDom(state);
+}
+window.applyLocalTaskStates = applyLocalTaskStates;
+
+function _taskIdFromAction(action, suffix) {
+  try {
+    const url = new URL(action, window.location.href);
+    const match = url.pathname.match(new RegExp(`/task/(\\d+)/${suffix}/`));
+    return match?.[1] || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+async function _markPendingCreateCompleted(localTaskId) {
+  const ops = await _idbGetAll();
+  for (const op of ops) {
+    if (op.meta?.action !== 'task_create') continue;
+    if (_stringId(op.meta.local_task_id) !== _stringId(localTaskId)) continue;
+    op.body = { ...(op.body || {}), completed: '1' };
+    await _idbPutPending(op);
+  }
+}
+
+async function completeTaskOffline(taskId, item) {
+  if (_isLocalTaskId(taskId)) {
+    await _markPendingCreateCompleted(taskId);
+    await _mergeTaskState(taskId, {
+      completed: true,
+      pending_action: 'complete',
+      localUpdatedAt: Date.now(),
+    }, item ? _taskStateFromElement(item) : null);
+    await applyLocalTaskStates();
+    return;
+  }
+
+  const base = item ? _taskStateFromElement(item) : { id: taskId };
+  const op = await queueOfflineOp(`/task/${taskId}/complete/`, 'form', {}, 'Terminer tâche', {
+    action: 'task_complete',
+    task_id: _stringId(taskId),
+  });
+  await _mergeTaskState(taskId, {
+    completed: true,
+    pending_action: 'complete',
+    localUpdatedAt: op.ts,
+  }, base);
+  await applyLocalTaskStates();
+}
+window.completeTaskOffline = completeTaskOffline;
+
+async function queueTaskReorderOffline(url, items, label) {
+  const serverItems = items
+    .filter(item => _isServerTaskId(item.id))
+    .map(item => ({
+      id: parseInt(item.id),
+      order: item.order,
+      section_id: item.section_id ? parseInt(item.section_id) : null,
+      parent_id: item.parent_id ? parseInt(item.parent_id) : null,
+    }));
+
+  const op = serverItems.length
+    ? await queueOfflineOp(url, 'json', serverItems, label, {
+      action: 'task_reorder',
+      task_ids: serverItems.map(item => _stringId(item.id)),
+    })
+    : { ts: Date.now() };
+
+  for (const item of items) {
+    await _mergeTaskState(item.id, {
+      order: item.order,
+      section_id: _blankToNull(item.section_id),
+      parent_id: _blankToNull(item.parent_id),
+      pending_action: 'reorder',
+      localUpdatedAt: op.ts,
+    }, _taskStateFromElement(item.element));
+  }
+  await applyLocalTaskStates();
+}
+window.queueTaskReorderOffline = queueTaskReorderOffline;
+
+async function queueLabelTaskReorderOffline(url, items, label) {
+  const serverItems = items
+    .filter(item => _isServerTaskId(item.id))
+    .map(item => ({ id: parseInt(item.id), order: item.order }));
+
+  const op = serverItems.length
+    ? await queueOfflineOp(url, 'json', serverItems, label, {
+      action: 'label_task_reorder',
+      task_ids: serverItems.map(item => _stringId(item.id)),
+    })
+    : { ts: Date.now() };
+
+  for (const item of items) {
+    await _mergeTaskState(item.id, {
+      label_order: item.order,
+      pending_action: 'label_reorder',
+      localUpdatedAt: op.ts,
+    }, _taskStateFromElement(item.element));
+  }
+  await applyLocalTaskStates();
+}
+window.queueLabelTaskReorderOffline = queueLabelTaskReorderOffline;
+
+function _formBody(form) {
+  const fd = new FormData(form);
+  const body = {};
+  for (const [k, v] of fd.entries()) {
+    if (k !== 'csrfmiddlewaretoken') body[k] = v;
+  }
+  return body;
+}
+
+async function _handleOfflineTaskCreate(form, body, action) {
+  const localTaskId = `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const op = await queueOfflineOp(action, 'form', body, 'Créer tâche', {
+    action: 'task_create',
+    local_task_id: localTaskId,
+  });
+  const state = _taskStateFromTaskForm(form, body, localTaskId);
+  state.pending_action = 'create';
+  state.localUpdatedAt = op.ts;
+  await _idbPutTaskState(state);
+
+  form.reset();
+  document.getElementById('modalAddTask')?.classList.remove('open');
+  await applyLocalTaskStates();
+}
+
+async function _handleOfflineTaskEdit(form, body, action) {
+  const taskId = _taskIdFromAction(action, 'edit');
+  if (!taskId) {
+    await queueOfflineOp(action, 'form', body, form.dataset.offlineLabel || action);
+    return;
+  }
+
+  const op = await queueOfflineOp(action, 'form', body, 'Modifier tâche', {
+    action: 'task_edit',
+    task_id: taskId,
+  });
+  const state = _taskStateFromTaskForm(form, body, taskId);
+  state.pending_action = 'edit';
+  state.localUpdatedAt = op.ts;
+  await _mergeTaskState(taskId, state);
+  await applyLocalTaskStates();
+
+  if (body.back && body.back.startsWith('/')) {
+    window.location.href = body.back;
+  }
+}
+
+async function _handleOfflineTaskDelete(form, body, action) {
+  const taskId = _taskIdFromAction(action, 'delete');
+  if (!taskId) {
+    await queueOfflineOp(action, 'form', body, form.dataset.offlineLabel || action);
+    return;
+  }
+
+  const op = await queueOfflineOp(action, 'form', body, 'Supprimer tâche', {
+    action: 'task_delete',
+    task_id: taskId,
+  });
+  await _mergeTaskState(taskId, {
+    deleted: true,
+    pending_action: 'delete',
+    localUpdatedAt: op.ts,
+  });
+  await applyLocalTaskStates();
+
+  if (body.back && body.back.startsWith('/')) {
+    window.location.href = body.back;
+  }
+}
 
 /* ════════════════════════════════════════════
  *  Toast
@@ -141,6 +634,7 @@ function _updateBanner() {
   const banner = document.getElementById('offlineBanner');
   if (!banner) return;
   banner.style.display = navigator.onLine ? 'none' : 'flex';
+  document.body.classList.toggle('is-offline', !navigator.onLine);
 }
 
 /* ════════════════════════════════════════════
@@ -283,33 +777,106 @@ async function checkAppRevision() {
 /* ════════════════════════════════════════════
  *  Synchronisation
  * ════════════════════════════════════════════ */
+async function _responseJsonOrNull(res) {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) return null;
+  try {
+    return await res.clone().json();
+  } catch (_) {
+    return null;
+  }
+}
+
+function _relatedTaskStateIds(op) {
+  const meta = op.meta || {};
+  if (meta.local_task_id) return [_stringId(meta.local_task_id)];
+  if (meta.task_id) return [_stringId(meta.task_id)];
+  if (Array.isArray(meta.task_ids)) return meta.task_ids.map(_stringId);
+  return [];
+}
+
+async function _hasNewerPendingTaskOp(taskId, op) {
+  const pending = await _idbGetAll();
+  return pending.some(other => {
+    if ((other.ts || 0) <= (op.ts || 0)) return false;
+    return _relatedTaskStateIds(other).includes(_stringId(taskId));
+  });
+}
+
+function _replaceTaskIdInDom(oldId, newId) {
+  for (const item of _findTaskItems(oldId)) {
+    item.dataset.taskId = _stringId(newId);
+    item.dataset.href = `/task/${newId}/`;
+    item.querySelectorAll('.task-complete-btn').forEach(btn => { btn.dataset.taskId = _stringId(newId); });
+    item.querySelectorAll('a[href]').forEach(a => {
+      if (a.href.includes('/task/')) a.href = `/task/${newId}/`;
+    });
+  }
+}
+
+function _clearPendingTaskUi(taskId) {
+  for (const item of _findTaskItems(taskId)) {
+    item.classList.remove('task-item-pending');
+    item.querySelectorAll('.task-local-hints').forEach(el => el.remove());
+  }
+}
+
+async function _finalizeSyncedOp(op, data) {
+  const meta = op.meta || {};
+  if (meta.action === 'task_create' && meta.local_task_id) {
+    if (data?.id) {
+      _replaceTaskIdInDom(meta.local_task_id, data.id);
+      _clearPendingTaskUi(data.id);
+    }
+  }
+
+  for (const taskId of _relatedTaskStateIds(op)) {
+    if (await _hasNewerPendingTaskOp(taskId, op)) continue;
+    await _idbDeleteTaskState(taskId);
+    _clearPendingTaskUi(taskId);
+  }
+}
+
 async function syncPending() {
-  const ops = await _idbGetAll();
+  const ops = (await _idbGetAll())
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0) || (a.id || 0) - (b.id || 0));
   if (ops.length === 0) return;
 
   showToast(`Synchronisation de ${ops.length} modification(s)…`, 8000);
 
   let synced = 0;
+  let skipped = 0;
   for (const op of ops) {
     try {
       let res;
       if (op.type === 'json') {
         res = await fetch(op.url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrf(),
+            'X-Offline-Ts': _stringId(op.ts),
+          },
           body: JSON.stringify(op.body),
         });
       } else {
         // form
         const fd = new FormData();
         fd.append('csrfmiddlewaretoken', getCsrf()); // token frais
+        fd.append('offline_ts', _stringId(op.ts));
         for (const [k, v] of Object.entries(op.body || {})) fd.append(k, v);
-        res = await fetch(op.url, { method: 'POST', body: fd });
+        const headers = {};
+        if (op.meta?.action === 'task_create') headers['X-Requested-With'] = 'XMLHttpRequest';
+        res = await fetch(op.url, { method: 'POST', headers, body: fd });
       }
 
       if (res.ok || res.status === 404) {
         // 404 = ressource supprimée entre-temps → on saute silencieusement
+        const data = res.status === 404 ? null : await _responseJsonOrNull(res);
         await _idbDelete(op.id);
+        if (data?.status === 'skipped') skipped++;
+        else if (data?.skipped) skipped += data.skipped;
+        await _finalizeSyncedOp(op, data);
         synced++;
       } else {
         showToast(`Erreur sync (HTTP ${res.status}) — ${ops.length - synced} restante(s). Réessayez.`);
@@ -325,8 +892,15 @@ async function syncPending() {
   await _updatePendingUI();
 
   if (synced > 0) {
-    showToast(`${synced} modification(s) synchronisée(s) ✓`);
-    _queueLocalRevisionRefresh();
+    const details = skipped ? ` (${skipped} ignorée(s), version serveur plus récente)` : '';
+    showToast(`${synced} modification(s) synchronisée(s)${details} ✓`);
+    await applyLocalTaskStates();
+    if (skipped) {
+      _pendingExternalRevision = _pendingExternalRevision || 'conflict';
+      _showAppUpdatePrompt();
+    } else {
+      _queueLocalRevisionRefresh();
+    }
   }
 }
 window.syncPending = syncPending;
@@ -342,15 +916,41 @@ document.addEventListener('submit', async e => {
   if (method !== 'POST') return;
 
   e.preventDefault();
+  e.stopImmediatePropagation();
 
-  const fd = new FormData(form);
-  const body = {};
-  for (const [k, v] of fd.entries()) {
-    if (k !== 'csrfmiddlewaretoken') body[k] = v;
-  }
-
+  const body = _formBody(form);
   const action = form.action || window.location.pathname;
   const label = form.dataset.offlineLabel || action;
+
+  if (form.id === 'formAddTask') {
+    await _handleOfflineTaskCreate(form, body, action);
+    return;
+  }
+
+  if (form.id === 'formAddLabel') {
+    await queueOfflineOp('/label/create/', 'form', body, 'Créer étiquette');
+    document.getElementById('modalAddLabel')?.classList.remove('open');
+    return;
+  }
+
+  if (form.id === 'formEditLabel') {
+    const id = document.getElementById('editLabelId')?.value;
+    const name = document.getElementById('editLabelName')?.value || '';
+    const color = document.getElementById('editLabelColor')?.value || '#718096';
+    await queueOfflineOp(`/label/${id}/edit/`, 'form', { name, color }, 'Modifier étiquette');
+    document.getElementById('modalEditLabel')?.classList.remove('open');
+    return;
+  }
+
+  if (form.id === 'taskEditForm') {
+    await _handleOfflineTaskEdit(form, body, action);
+    return;
+  }
+
+  if (form.id === 'deleteTaskForm') {
+    await _handleOfflineTaskDelete(form, body, action);
+    return;
+  }
 
   await queueOfflineOp(action, 'form', body, label);
 
@@ -378,6 +978,7 @@ window.addEventListener('offline', () => {
 document.addEventListener('DOMContentLoaded', async () => {
   _updateBanner();
   await _updatePendingUI();
+  await applyLocalTaskStates();
 
   // Bouton "Synchroniser maintenant" (affiché quand ops en attente + en ligne)
   document.getElementById('syncNowBtn')?.addEventListener('click', syncPending);

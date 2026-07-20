@@ -324,17 +324,17 @@ document.addEventListener('click', async e => {
 
   const taskId  = btn.dataset.taskId;
   const redirect = btn.dataset.redirect;
+  const item = btn.closest('.task-item');
 
   // ── Hors-ligne : optimistic UI + mise en file ──
-  if (!navigator.onLine) {
-    await queueOfflineOp(`/task/${taskId}/complete/`, 'form', {}, 'Terminer tâche');
-    const item = btn.closest('.task-item');
-    if (item) {
-      item.style.transition = 'opacity .3s, transform .3s';
-      item.style.opacity = '0';
-      item.style.transform = 'translateX(20px)';
-      setTimeout(() => item.remove(), 300);
+  if (!navigator.onLine || String(taskId).startsWith('local-')) {
+    if (window.completeTaskOffline) {
+      await window.completeTaskOffline(taskId, item);
+    } else {
+      await queueOfflineOp(`/task/${taskId}/complete/`, 'form', {}, 'Terminer tâche');
+      item?.remove();
     }
+    if (!item && redirect) location.href = redirect;
     return;
   }
 
@@ -571,21 +571,34 @@ async function saveOrder(evt) {
   const parentId  = list.dataset.parent  || null;
 
   const items = [...list.querySelectorAll(':scope > .task-item')].map((el, i) => ({
-    id: parseInt(el.dataset.taskId),
+    id: el.dataset.taskId,
     order: i,
-    section_id: sectionId ? parseInt(sectionId) : null,
-    parent_id:  parentId  ? parseInt(parentId)  : null,
+    section_id: sectionId || null,
+    parent_id:  parentId  || null,
+    element: el,
   }));
+  const serverItems = items
+    .filter(item => /^\d+$/.test(String(item.id)))
+    .map(item => ({
+      id: parseInt(item.id),
+      order: item.order,
+      section_id: item.section_id ? parseInt(item.section_id) : null,
+      parent_id: item.parent_id ? parseInt(item.parent_id) : null,
+    }));
 
-  if (!navigator.onLine) {
-    await queueOfflineOp('/task/reorder/', 'json', items, 'Réordonner tâches');
+  if (!navigator.onLine || serverItems.length !== items.length) {
+    if (window.queueTaskReorderOffline) {
+      await window.queueTaskReorderOffline('/task/reorder/', items, 'Réordonner tâches');
+    } else {
+      await queueOfflineOp('/task/reorder/', 'json', serverItems, 'Réordonner tâches');
+    }
     return;
   }
 
   fetch('/task/reorder/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-    body: JSON.stringify(items),
+    body: JSON.stringify(serverItems),
   });
 }
 
@@ -629,14 +642,29 @@ function _initLabelSortable() {
     dragClass: 'sortable-drag',
     delay: 150,
     delayOnTouchOnly: true,
-    onEnd: () => {
+    onEnd: async () => {
       const items = [...list.querySelectorAll('.task-item')].map((el, i) => ({
-        id: parseInt(el.dataset.taskId), order: i,
+        id: el.dataset.taskId,
+        order: i,
+        element: el,
       }));
+      const serverItems = items
+        .filter(item => /^\d+$/.test(String(item.id)))
+        .map(item => ({ id: parseInt(item.id), order: item.order }));
+
+      if (!navigator.onLine || serverItems.length !== items.length) {
+        if (window.queueLabelTaskReorderOffline) {
+          await window.queueLabelTaskReorderOffline(`/label/${labelId}/tasks/reorder/`, items, 'Réordonner tâches étiquette');
+        } else {
+          await queueOfflineOp(`/label/${labelId}/tasks/reorder/`, 'json', serverItems, 'Réordonner tâches étiquette');
+        }
+        return;
+      }
+
       fetch(`/label/${labelId}/tasks/reorder/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-        body: JSON.stringify(items),
+        body: JSON.stringify(serverItems),
       });
     },
   });

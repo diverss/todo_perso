@@ -82,7 +82,10 @@
           <select name="label_id" class="form-input form-select">
             <option value="">— Aucune —</option>
             {% for l in labels %}
-            <option value="{{ l.pk }}" {% if task.label and task.label.pk == l.pk %}selected{% endif %}>
+            <option value="{{ l.pk }}"
+                    data-label-name="{{ l.name }}"
+                    data-label-color="{{ l.color }}"
+                    {% if task.label and task.label.pk == l.pk %}selected{% endif %}>
               {{ l.name }}
             </option>
             {% endfor %}
@@ -142,6 +145,15 @@
       <div class="task-item task-item-sub"
            data-task-id="{{ sub.pk }}"
            data-order="{{ sub.order }}"
+           data-task-title="{{ sub.title }}"
+           data-project-id="{{ sub.project_id }}"
+           data-section-id="{{ sub.section_id|default:'' }}"
+           data-parent-id="{{ sub.parent_id|default:'' }}"
+           data-priority="{{ sub.priority }}"
+           data-priority-color="{{ sub.priority_color|default:'#555' }}"
+           data-label-id="{{ sub.label_id|default:'' }}"
+           data-label-name="{% if sub.label %}{{ sub.label.name }}{% endif %}"
+           data-label-color="{% if sub.label %}{{ sub.label.color }}{% endif %}"
            data-href="{% url 'task_detail' sub.pk %}">
         <div class="task-row">
           <button class="task-complete-btn"

@@ -1,7 +1,9 @@
 import json
+from datetime import timedelta
 
 from django.urls import resolve
 from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
 
 from .models import Project, Section, Task
 from .views import (
@@ -221,3 +223,66 @@ class SearchViewTests(TestCase):
         self.assertNotContains(response, 'Archive garage')
         self.assertContains(response, 'Recherche : garage')
         self.assertContains(response, 'value="garage"')
+
+
+class OfflineTaskConflictTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.project = Project.objects.create(name='Projet')
+
+    def _ms(self, dt):
+        return int(dt.timestamp() * 1000)
+
+    def test_older_offline_complete_is_skipped(self):
+        task = Task.objects.create(title='Pain', project=self.project)
+        server_dt = timezone.now()
+        task.updated_at = server_dt
+        task.save(update_fields=['updated_at'])
+
+        request = self.factory.post(
+            f'/task/{task.pk}/complete/',
+            data={'offline_ts': self._ms(server_dt - timedelta(minutes=1))},
+        )
+        response = task_complete(request, task.pk)
+
+        task.refresh_from_db()
+        self.assertJSONEqual(response.content, {'status': 'skipped', 'reason': 'newer_server_version'})
+        self.assertFalse(task.completed)
+
+    def test_newer_offline_complete_is_applied(self):
+        task = Task.objects.create(title='Pain', project=self.project)
+        server_dt = timezone.now()
+        task.updated_at = server_dt
+        task.save(update_fields=['updated_at'])
+        op_ms = self._ms(server_dt + timedelta(minutes=1))
+
+        request = self.factory.post(
+            f'/task/{task.pk}/complete/',
+            data={'offline_ts': op_ms},
+        )
+        task_complete(request, task.pk)
+
+        task.refresh_from_db()
+        self.assertTrue(task.completed)
+        self.assertEqual(self._ms(task.updated_at), op_ms)
+
+    def test_older_offline_edit_is_skipped(self):
+        task = Task.objects.create(title='Pain', project=self.project)
+        server_dt = timezone.now()
+        task.updated_at = server_dt
+        task.save(update_fields=['updated_at'])
+
+        request = self.factory.post(f'/task/{task.pk}/edit/', data={
+            'offline_ts': self._ms(server_dt - timedelta(minutes=1)),
+            'title': 'Pain modifié',
+            'description': '',
+            'priority': task.priority,
+            'project_id': self.project.pk,
+            'section_id': '',
+            'parent_id': '',
+        })
+        response = task_edit(request, task.pk)
+
+        task.refresh_from_db()
+        self.assertJSONEqual(response.content, {'status': 'skipped', 'reason': 'newer_server_version'})
+        self.assertEqual(task.title, 'Pain')
