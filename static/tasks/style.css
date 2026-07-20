@@ -519,6 +519,31 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 .form-textarea.is-resizing {
   cursor: ns-resize;
 }
+.description-links {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.description-links-title {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.description-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.description-links-list a {
+  color: #8ab4ff;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.description-links-list a:hover { text-decoration: underline; }
 .form-select { appearance: none; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 500px) { .form-row { grid-template-columns: 1fr; } }

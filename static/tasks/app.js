@@ -58,6 +58,67 @@ document.addEventListener('DOMContentLoaded', () => {
   updateClearButton();
 });
 
+/* ── Description links preview ── */
+const DESCRIPTION_LINK_RE = /https?:\/\/[^\s<>"']+/gi;
+
+function _trimUrlPunctuation(url) {
+  let result = url.replace(/[.,;:!?]+$/g, '');
+  const pairs = { ')': '(', ']': '[', '}': '{' };
+  while (result.length && pairs[result.at(-1)]) {
+    const close = result.at(-1);
+    const open = pairs[close];
+    const opens = [...result].filter(ch => ch === open).length;
+    const closes = [...result].filter(ch => ch === close).length;
+    if (closes <= opens) break;
+    result = result.slice(0, -1);
+  }
+  return result;
+}
+
+function _extractDescriptionLinks(text) {
+  const seen = new Set();
+  const matches = text.match(DESCRIPTION_LINK_RE) || [];
+  return matches
+    .map(_trimUrlPunctuation)
+    .filter(url => {
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+        if (seen.has(parsed.href)) return false;
+        seen.add(parsed.href);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    });
+}
+
+function _renderDescriptionLinks(textarea) {
+  const panel = document.getElementById(textarea.dataset.descriptionLinksTarget);
+  const list = panel?.querySelector('.description-links-list');
+  if (!panel || !list) return;
+
+  list.innerHTML = '';
+  const links = _extractDescriptionLinks(textarea.value);
+  panel.hidden = links.length === 0;
+
+  for (const url of links) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = url;
+    list.appendChild(a);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('textarea[data-description-links-target]').forEach(textarea => {
+    textarea.addEventListener('input', () => _renderDescriptionLinks(textarea));
+    _renderDescriptionLinks(textarea);
+  });
+});
+
 /* ── Textareas resize handle élargi ── */
 const TEXTAREA_RESIZE_ZONE_W = 56;
 const TEXTAREA_RESIZE_ZONE_H = 36;

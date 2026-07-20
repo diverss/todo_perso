@@ -31,7 +31,14 @@
 
       <div class="form-group">
         <label class="form-label">Description</label>
-        <textarea name="description" class="form-input form-textarea" rows="4">{{ task.description }}</textarea>
+        <textarea name="description"
+                  class="form-input form-textarea"
+                  rows="4"
+                  data-description-links-target="taskDescriptionLinks">{{ task.description }}</textarea>
+        <div class="description-links" id="taskDescriptionLinks" hidden>
+          <span class="description-links-title">Liens contenus dans la description</span>
+          <div class="description-links-list"></div>
+        </div>
       </div>
 
       <div class="form-row">
