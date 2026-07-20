@@ -78,7 +78,13 @@
       <div class="section-title-group">
         <span class="section-name" id="sectionName-{{ section.pk }}">{{ section.name }}</span>
         {% if section.has_recurring_tasks %}
-        <span class="section-recurring-icon" title="Tâches récurrentes" aria-label="Tâches récurrentes">↻</span>
+        <button type="button"
+                class="section-recurring-button"
+                onclick="openRecurringTasks({{ section.pk }})"
+                title="Tâches récurrentes"
+                aria-label="Tâches récurrentes">
+          <span class="section-recurring-icon" aria-hidden="true">↻</span>
+        </button>
         {% endif %}
       </div>
       <div class="section-actions">
@@ -96,7 +102,10 @@
                     onclick="startEditSection({{ section.pk }}, '{{ section.name|escapejs }}')">Renommer</button>
             {% if section.has_recurring_tasks %}
             <button class="dropdown-item"
-                    onclick="openRecurringTasks({{ section.pk }})">Tâches récurrentes</button>
+                    onclick="openRecurringTasks({{ section.pk }})">
+              <span class="section-recurring-icon dropdown-recurring-icon" aria-hidden="true">↻</span>
+              Tâches récurrentes
+            </button>
             {% endif %}
             <form method="post"
                   action="{% url 'section_toggle_favorite' section.pk %}"

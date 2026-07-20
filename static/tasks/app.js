@@ -62,6 +62,9 @@ function _taskHrefWithCurrentBack(href) {
   try {
     const url = new URL(href, window.location.href);
     if (url.origin !== window.location.origin || !/^\/task\/\d+\/$/.test(url.pathname)) return href;
+    if (/^\/inbox\/?$/.test(window.location.pathname) && !url.searchParams.has('back')) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
     url.searchParams.set('back', currentViewBackUrl());
     return `${url.pathname}${url.search}${url.hash}`;
   } catch (_) {
