@@ -1,11 +1,14 @@
+from urllib.parse import quote
+
 from django.conf import settings
 from django.shortcuts import redirect
+from django.utils.cache import patch_vary_headers
 
 # Chemins exemptés de l'authentification
-_EXEMPT = ('/login/', '/logout/', '/sw.js', '/manifest.json', '/static/', '/media/', '/admin/')
+_EXEMPT = ('/login/', '/sw.js', '/manifest.json', '/static/', '/admin/')
 
 
-class TokenAuthMiddleware:
+class LoginRequiredMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -13,7 +16,10 @@ class TokenAuthMiddleware:
         if any(request.path.startswith(p) for p in _EXEMPT):
             return self.get_response(request)
 
-        if request.COOKIES.get('access_token') != settings.ACCESS_TOKEN:
-            return redirect(f'/login/?next={request.path}')
+        if not request.user.is_authenticated:
+            next_url = quote(request.get_full_path())
+            return redirect(f'{settings.LOGIN_URL}?next={next_url}')
 
-        return self.get_response(request)
+        response = self.get_response(request)
+        patch_vary_headers(response, ['Cookie'])
+        return response

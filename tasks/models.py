@@ -1,21 +1,26 @@
-import os
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 
 class Label(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='labels')
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=7, default='#6c757d')
     order = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['order', 'name']
+        indexes = [
+            models.Index(fields=['user', 'order', 'name'], name='label_user_order_name_idx'),
+        ]
 
     def __str__(self):
         return self.name
 
 
 class Project(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='projects')
     name = models.CharField(max_length=200)
     color = models.CharField(max_length=7, default='#5b8def')
     order = models.PositiveIntegerField(default=0)
@@ -24,12 +29,16 @@ class Project(models.Model):
 
     class Meta:
         ordering = ['order', 'name']
+        indexes = [
+            models.Index(fields=['user', 'is_inbox', 'order', 'name'], name='project_user_inbox_order_idx'),
+        ]
 
     def __str__(self):
         return self.name
 
 
 class Section(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sections')
     name = models.CharField(max_length=200)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sections')
     order = models.PositiveIntegerField(default=0)
@@ -38,6 +47,10 @@ class Section(models.Model):
 
     class Meta:
         ordering = ['order', 'name']
+        indexes = [
+            models.Index(fields=['user', 'project', 'order', 'name'], name='section_user_project_order_idx'),
+            models.Index(fields=['user', 'is_favorite', 'favorite_order'], name='section_user_favorite_idx'),
+        ]
 
     def __str__(self):
         return f'{self.project.name} / {self.name}'
@@ -51,6 +64,7 @@ class Task(models.Model):
         (4, 'Priorité 4'),
     ]
 
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=500)
     description = models.TextField(blank=True)
     priority = models.PositiveSmallIntegerField(choices=PRIORITY_CHOICES, default=4)
@@ -67,6 +81,10 @@ class Task(models.Model):
 
     class Meta:
         ordering = ['order', 'created_at']
+        indexes = [
+            models.Index(fields=['user', 'project', 'completed', 'parent', 'section', 'order'], name='task_user_project_vis_idx'),
+            models.Index(fields=['user', 'label', 'completed', 'label_order', 'order'], name='task_user_label_vis_idx'),
+        ]
 
     def __str__(self):
         return self.title
@@ -86,6 +104,7 @@ class AppSettings(models.Model):
         (VIEW_PROJECT, 'Projet spécifique'),
         (VIEW_LABEL, 'Étiquette spécifique'),
     ]
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='todo_settings')
     default_view_type = models.CharField(max_length=20, choices=VIEW_CHOICES, default=VIEW_FIRST_PROJECT)
     default_project = models.ForeignKey(Project, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     default_label = models.ForeignKey(Label, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
@@ -94,8 +113,8 @@ class AppSettings(models.Model):
         verbose_name = 'Paramètres'
 
     @classmethod
-    def load(cls):
-        obj, _ = cls.objects.get_or_create(pk=1)
+    def load(cls, user):
+        obj, _ = cls.objects.get_or_create(user=user)
         return obj
 
 

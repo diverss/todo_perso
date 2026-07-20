@@ -1,6 +1,8 @@
 import json
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
+from django.http import Http404
 from django.urls import resolve
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
@@ -19,58 +21,68 @@ from .views import (
 )
 
 
+def make_user(username):
+    return get_user_model().objects.create_user(username=username, password='secret')
+
+
+def with_user(request, user):
+    request.user = user
+    return request
+
+
 class EmptySectionOrderingTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
-        self.project = Project.objects.create(name='Projet')
-        self.alpha = Section.objects.create(name='Alpha', project=self.project, order=0)
-        self.beta = Section.objects.create(name='Beta', project=self.project, order=1)
-        self.gamma = Section.objects.create(name='Gamma', project=self.project, order=2)
+        self.user = make_user('user-empty')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+        self.alpha = Section.objects.create(user=self.user, name='Alpha', project=self.project, order=0)
+        self.beta = Section.objects.create(user=self.user, name='Beta', project=self.project, order=1)
+        self.gamma = Section.objects.create(user=self.user, name='Gamma', project=self.project, order=2)
 
     def section_order(self):
         return list(
             Section.objects
-            .filter(project=self.project)
+            .filter(user=self.user, project=self.project)
             .order_by('order', 'name', 'pk')
             .values_list('name', flat=True)
         )
 
     def test_completing_last_visible_task_moves_section_to_end(self):
-        task = Task.objects.create(title='A faire', project=self.project, section=self.alpha)
+        task = Task.objects.create(user=self.user, title='A faire', project=self.project, section=self.alpha)
 
-        request = self.factory.post(f'/task/{task.pk}/complete/')
+        request = with_user(self.factory.post(f'/task/{task.pk}/complete/'), self.user)
         task_complete(request, task.pk)
 
         self.assertEqual(self.section_order(), ['Beta', 'Gamma', 'Alpha'])
 
     def test_completing_task_keeps_section_in_place_when_another_task_remains(self):
-        first = Task.objects.create(title='Un', project=self.project, section=self.alpha, order=0)
-        Task.objects.create(title='Deux', project=self.project, section=self.alpha, order=1)
+        first = Task.objects.create(user=self.user, title='Un', project=self.project, section=self.alpha, order=0)
+        Task.objects.create(user=self.user, title='Deux', project=self.project, section=self.alpha, order=1)
 
-        request = self.factory.post(f'/task/{first.pk}/complete/')
+        request = with_user(self.factory.post(f'/task/{first.pk}/complete/'), self.user)
         task_complete(request, first.pk)
 
         self.assertEqual(self.section_order(), ['Alpha', 'Beta', 'Gamma'])
 
     def test_deleting_last_visible_task_moves_section_to_end(self):
-        task = Task.objects.create(title='A supprimer', project=self.project, section=self.alpha)
+        task = Task.objects.create(user=self.user, title='A supprimer', project=self.project, section=self.alpha)
 
-        request = self.factory.post(f'/task/{task.pk}/delete/')
+        request = with_user(self.factory.post(f'/task/{task.pk}/delete/'), self.user)
         task_delete(request, task.pk)
 
         self.assertEqual(self.section_order(), ['Beta', 'Gamma', 'Alpha'])
 
     def test_editing_last_visible_task_to_another_section_moves_old_section_to_end(self):
-        task = Task.objects.create(title='A deplacer', project=self.project, section=self.alpha)
+        task = Task.objects.create(user=self.user, title='A deplacer', project=self.project, section=self.alpha)
 
-        request = self.factory.post(f'/task/{task.pk}/edit/', data={
+        request = with_user(self.factory.post(f'/task/{task.pk}/edit/', data={
             'title': task.title,
             'description': '',
             'priority': task.priority,
             'project_id': self.project.pk,
             'section_id': self.beta.pk,
             'parent_id': '',
-        })
+        }), self.user)
         task_edit(request, task.pk)
 
         task.refresh_from_db()
@@ -78,18 +90,18 @@ class EmptySectionOrderingTests(TestCase):
         self.assertEqual(self.section_order(), ['Beta', 'Gamma', 'Alpha'])
 
     def test_dragging_last_visible_task_to_another_section_moves_old_section_to_end(self):
-        moved = Task.objects.create(title='A deplacer', project=self.project, section=self.alpha)
-        existing = Task.objects.create(title='Deja la', project=self.project, section=self.beta)
+        moved = Task.objects.create(user=self.user, title='A deplacer', project=self.project, section=self.alpha)
+        existing = Task.objects.create(user=self.user, title='Deja la', project=self.project, section=self.beta)
         payload = [
             {'id': existing.pk, 'order': 0, 'section_id': self.beta.pk, 'parent_id': None},
             {'id': moved.pk, 'order': 1, 'section_id': self.beta.pk, 'parent_id': None},
         ]
 
-        request = self.factory.post(
+        request = with_user(self.factory.post(
             '/task/reorder/',
             data=json.dumps(payload),
             content_type='application/json',
-        )
+        ), self.user)
         task_reorder(request)
 
         moved.refresh_from_db()
@@ -100,15 +112,16 @@ class EmptySectionOrderingTests(TestCase):
 class SectionFavoriteTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
-        self.project = Project.objects.create(name='Projet')
-        self.alpha = Section.objects.create(name='Alpha', project=self.project, order=0)
-        self.beta = Section.objects.create(name='Beta', project=self.project, order=1)
-        self.gamma = Section.objects.create(name='Gamma', project=self.project, order=2)
+        self.user = make_user('user-favorite')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+        self.alpha = Section.objects.create(user=self.user, name='Alpha', project=self.project, order=0)
+        self.beta = Section.objects.create(user=self.user, name='Beta', project=self.project, order=1)
+        self.gamma = Section.objects.create(user=self.user, name='Gamma', project=self.project, order=2)
 
     def favorite_order(self):
         return list(
             Section.objects
-            .filter(is_favorite=True)
+            .filter(user=self.user, is_favorite=True)
             .order_by('favorite_order', 'project__order', 'project__name', 'order', 'name', 'pk')
             .values_list('name', flat=True)
         )
@@ -118,7 +131,7 @@ class SectionFavoriteTests(TestCase):
         self.alpha.favorite_order = 0
         self.alpha.save()
 
-        request = self.factory.post(f'/section/{self.beta.pk}/favorite/')
+        request = with_user(self.factory.post(f'/section/{self.beta.pk}/favorite/'), self.user)
         section_toggle_favorite(request, self.beta.pk)
 
         self.beta.refresh_from_db()
@@ -137,7 +150,7 @@ class SectionFavoriteTests(TestCase):
         self.gamma.favorite_order = 2
         self.gamma.save()
 
-        request = self.factory.post(f'/section/{self.beta.pk}/favorite/')
+        request = with_user(self.factory.post(f'/section/{self.beta.pk}/favorite/'), self.user)
         section_toggle_favorite(request, self.beta.pk)
 
         self.beta.refresh_from_db()
@@ -157,11 +170,11 @@ class SectionFavoriteTests(TestCase):
             {'id': self.alpha.pk, 'order': 1},
             {'id': self.beta.pk, 'order': 2},
         ]
-        request = self.factory.post(
+        request = with_user(self.factory.post(
             '/section/favorites/reorder/',
             data=json.dumps(payload),
             content_type='application/json',
-        )
+        ), self.user)
         section_favorite_reorder(request)
 
         self.assertEqual(self.favorite_order(), ['Gamma', 'Alpha', 'Beta'])
@@ -172,7 +185,7 @@ class SectionFavoriteTests(TestCase):
         self.beta.favorite_order = 0
         self.beta.save()
 
-        request = self.factory.get(f'/project/{self.project.pk}/?section={self.beta.pk}')
+        request = with_user(self.factory.get(f'/project/{self.project.pk}/?section={self.beta.pk}'), self.user)
         request.resolver_match = resolve(f'/project/{self.project.pk}/')
         response = project_view(request, self.project.pk)
         html = response.content.decode()
@@ -186,14 +199,15 @@ class SectionFavoriteTests(TestCase):
 class TaskDetailInboxTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
-        self.inbox = Project.objects.create(name='A trier', is_inbox=True)
-        self.project = Project.objects.create(name='Projet')
+        self.user = make_user('user-inbox')
+        self.inbox = Project.objects.create(user=self.user, name='A trier', is_inbox=True)
+        self.project = Project.objects.create(user=self.user, name='Projet')
 
     @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
     def test_inbox_task_edit_form_keeps_inbox_selected(self):
-        task = Task.objects.create(title='A classer', project=self.inbox)
+        task = Task.objects.create(user=self.user, title='A classer', project=self.inbox)
 
-        request = self.factory.get(f'/task/{task.pk}/')
+        request = with_user(self.factory.get(f'/task/{task.pk}/'), self.user)
         request.resolver_match = resolve(f'/task/{task.pk}/')
         response = task_detail(request, task.pk)
 
@@ -208,14 +222,15 @@ class TaskDetailInboxTests(TestCase):
 class SearchViewTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
-        self.project = Project.objects.create(name='Projet')
+        self.user = make_user('user-search')
+        self.project = Project.objects.create(user=self.user, name='Projet')
 
     @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
     def test_search_returns_active_matching_tasks_only(self):
-        Task.objects.create(title='Garage actif', description='Verifier la porte', project=self.project)
-        Task.objects.create(title='Archive garage', project=self.project, completed=True)
+        Task.objects.create(user=self.user, title='Garage actif', description='Verifier la porte', project=self.project)
+        Task.objects.create(user=self.user, title='Archive garage', project=self.project, completed=True)
 
-        request = self.factory.get('/search/?q=garage')
+        request = with_user(self.factory.get('/search/?q=garage'), self.user)
         request.resolver_match = resolve('/search/')
         response = search_view(request)
 
@@ -225,24 +240,80 @@ class SearchViewTests(TestCase):
         self.assertContains(response, 'value="garage"')
 
 
+class UserIsolationTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('owner')
+        self.other = make_user('other')
+        self.project = Project.objects.create(user=self.user, name='Projet owner')
+        self.other_project = Project.objects.create(user=self.other, name='Projet other')
+
+    def test_project_view_rejects_another_users_project(self):
+        request = with_user(self.factory.get(f'/project/{self.other_project.pk}/'), self.user)
+
+        with self.assertRaises(Http404):
+            project_view(request, self.other_project.pk)
+
+    @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
+    def test_search_only_returns_current_users_tasks(self):
+        Task.objects.create(user=self.user, title='Garage perso', project=self.project)
+        Task.objects.create(user=self.other, title='Garage autre', project=self.other_project)
+
+        request = with_user(self.factory.get('/search/?q=garage'), self.user)
+        request.resolver_match = resolve('/search/')
+        response = search_view(request)
+
+        self.assertContains(response, 'Garage perso')
+        self.assertNotContains(response, 'Garage autre')
+
+    def test_task_complete_rejects_another_users_task(self):
+        task = Task.objects.create(user=self.other, title='Autre tâche', project=self.other_project)
+        request = with_user(self.factory.post(f'/task/{task.pk}/complete/'), self.user)
+
+        with self.assertRaises(Http404):
+            task_complete(request, task.pk)
+
+
+class AuthFlowTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='login-user', password='secret')
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.get('/settings/')
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response['Location'].startswith('/login/?next='))
+
+    def test_username_password_login_sets_session(self):
+        response = self.client.post('/login/', {
+            'username': 'login-user',
+            'password': 'secret',
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/')
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.user.pk)
+
+
 class OfflineTaskConflictTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
-        self.project = Project.objects.create(name='Projet')
+        self.user = make_user('user-conflict')
+        self.project = Project.objects.create(user=self.user, name='Projet')
 
     def _ms(self, dt):
         return int(dt.timestamp() * 1000)
 
     def test_older_offline_complete_is_skipped(self):
-        task = Task.objects.create(title='Pain', project=self.project)
+        task = Task.objects.create(user=self.user, title='Pain', project=self.project)
         server_dt = timezone.now()
         task.updated_at = server_dt
         task.save(update_fields=['updated_at'])
 
-        request = self.factory.post(
+        request = with_user(self.factory.post(
             f'/task/{task.pk}/complete/',
             data={'offline_ts': self._ms(server_dt - timedelta(minutes=1))},
-        )
+        ), self.user)
         response = task_complete(request, task.pk)
 
         task.refresh_from_db()
@@ -250,16 +321,16 @@ class OfflineTaskConflictTests(TestCase):
         self.assertFalse(task.completed)
 
     def test_newer_offline_complete_is_applied(self):
-        task = Task.objects.create(title='Pain', project=self.project)
+        task = Task.objects.create(user=self.user, title='Pain', project=self.project)
         server_dt = timezone.now()
         task.updated_at = server_dt
         task.save(update_fields=['updated_at'])
         op_ms = self._ms(server_dt + timedelta(minutes=1))
 
-        request = self.factory.post(
+        request = with_user(self.factory.post(
             f'/task/{task.pk}/complete/',
             data={'offline_ts': op_ms},
-        )
+        ), self.user)
         task_complete(request, task.pk)
 
         task.refresh_from_db()
@@ -267,12 +338,12 @@ class OfflineTaskConflictTests(TestCase):
         self.assertEqual(self._ms(task.updated_at), op_ms)
 
     def test_older_offline_edit_is_skipped(self):
-        task = Task.objects.create(title='Pain', project=self.project)
+        task = Task.objects.create(user=self.user, title='Pain', project=self.project)
         server_dt = timezone.now()
         task.updated_at = server_dt
         task.save(update_fields=['updated_at'])
 
-        request = self.factory.post(f'/task/{task.pk}/edit/', data={
+        request = with_user(self.factory.post(f'/task/{task.pk}/edit/', data={
             'offline_ts': self._ms(server_dt - timedelta(minutes=1)),
             'title': 'Pain modifié',
             'description': '',
@@ -280,7 +351,7 @@ class OfflineTaskConflictTests(TestCase):
             'project_id': self.project.pk,
             'section_id': '',
             'parent_id': '',
-        })
+        }), self.user)
         response = task_edit(request, task.pk)
 
         task.refresh_from_db()

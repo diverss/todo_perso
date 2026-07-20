@@ -1,7 +1,5 @@
 from django.contrib import admin
-from django.urls import path, include
-from django.conf import settings
-from django.conf.urls.static import static
+from django.urls import include, path, re_path
 from tasks import views as task_views
 
 urlpatterns = [
@@ -10,5 +8,6 @@ urlpatterns = [
     path('manifest.json', task_views.manifest, name='manifest'),
     path('login/', task_views.login_view, name='login'),
     path('logout/', task_views.logout_view, name='logout'),
+    re_path(r'^media/(?P<path>.*)$', task_views.protected_media, name='protected_media'),
     path('', include('tasks.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]

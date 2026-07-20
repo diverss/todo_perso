@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from tasks.models import Task, TaskImage
 
@@ -7,9 +8,16 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--dry-run', action='store_true', help='Compter sans supprimer')
+        parser.add_argument('--username', help='Limiter la purge à un utilisateur')
 
     def handle(self, *args, **options):
         qs = Task.objects.filter(completed=True)
+        if options.get('username'):
+            user = get_user_model().objects.filter(username=options['username']).first()
+            if not user:
+                self.stderr.write(f'Utilisateur introuvable : {options["username"]}')
+                return
+            qs = qs.filter(user=user)
         count = qs.count()
         img_count = TaskImage.objects.filter(task__in=qs).count()
 

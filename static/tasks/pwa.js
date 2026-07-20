@@ -26,7 +26,8 @@ window.getCsrf = getCsrf;
 /* ════════════════════════════════════════════
  *  IndexedDB helpers
  * ════════════════════════════════════════════ */
-const IDB_NAME  = 'todo-offline';
+const IDB_USER_ID = window.TODO_USER_ID || 'anonymous';
+const IDB_NAME  = `todo-offline-${IDB_USER_ID}`;
 const IDB_STORE = 'pending';
 const IDB_TASK_STATE_STORE = 'task_state';
 const IDB_VER   = 2;

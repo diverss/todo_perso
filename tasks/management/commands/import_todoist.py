@@ -2,8 +2,8 @@
 Importe projets, sections, tâches, étiquettes et commentaires depuis Todoist API v1.
 
 Usage :
-    python3 manage.py import_todoist --token <TOKEN_API>
-    python3 manage.py import_todoist --token <TOKEN_API> --no-images
+    python3 manage.py import_todoist --token <TOKEN_API> --username <USER>
+    python3 manage.py import_todoist --token <TOKEN_API> --username <USER> --no-images
 
 Priorité : Todoist API — 4=urgent(rouge), 1=normal
            Notre app   — 1=urgent(rouge), 4=normal
@@ -12,8 +12,9 @@ Priorité : Todoist API — 4=urgent(rouge), 1=normal
 
 import time
 import requests
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from tasks.models import Label, Project, Section, Task, TaskImage
 
@@ -41,11 +42,23 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--token', required=True, help='Token API Todoist (Paramètres → Intégrations)')
         parser.add_argument('--no-images', action='store_true', help='Ignorer les images des commentaires')
+        parser.add_argument('--username', help='Utilisateur local qui recevra les données importées')
 
     def handle(self, *args, **options):
         token = options['token']
         no_images = options['no_images']
+        username = options.get('username')
         headers = {'Authorization': f'Bearer {token}'}
+        User = get_user_model()
+
+        if username:
+            user = User.objects.filter(username=username).first()
+            if not user:
+                raise CommandError(f'Utilisateur introuvable : {username}')
+        elif User.objects.count() == 1:
+            user = User.objects.first()
+        else:
+            raise CommandError('Plusieurs utilisateurs existent : précisez --username.')
 
         def get_all(endpoint, params=None):
             """Récupère toutes les pages d'un endpoint paginé."""
@@ -78,6 +91,7 @@ class Command(BaseCommand):
             c = p.get('color', '')
             color = c if c.startswith('#') else TODOIST_COLORS.get(c, '#5b8def')
             obj = Project.objects.create(
+                user=user,
                 name=p['name'],
                 color=color,
                 order=p.get('child_order', p.get('order', 0)),
@@ -94,6 +108,7 @@ class Command(BaseCommand):
             if s['project_id'] not in project_map:
                 continue
             obj = Section.objects.create(
+                user=user,
                 name=s['name'],
                 project=project_map[s['project_id']],
                 order=s.get('section_order', s.get('order', 0)),
@@ -116,7 +131,7 @@ class Command(BaseCommand):
         unique_names = sorted({n for t in raw_tasks for n in (t.get('labels') or [])})
         label_map = {}
         for i, name in enumerate(unique_names):
-            obj = Label.objects.create(name=name, color=LABEL_COLORS[i % len(LABEL_COLORS)], order=i)
+            obj = Label.objects.create(user=user, name=name, color=LABEL_COLORS[i % len(LABEL_COLORS)], order=i)
             label_map[name] = obj
         self.stdout.write(f'  ✓ {len(label_map)} étiquette(s)')
 
@@ -138,6 +153,7 @@ class Command(BaseCommand):
             title = t.get('content') or t.get('title') or '(sans titre)'
 
             obj = Task.objects.create(
+                user=user,
                 title=title,
                 description=t.get('description') or '',
                 priority=priority,

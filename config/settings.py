@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,11 +21,11 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'tasks.middleware.TokenAuthMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'tasks.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -73,7 +72,5 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ── Accès par token ──────────────────────────────────────────────────────────
-# Définir la variable d'environnement TODO_TOKEN sur chaque machine :
-#   export TODO_TOKEN='mon-token-secret'   (dans ~/.bashrc ou le service systemd)
-ACCESS_TOKEN = os.environ.get('TODO_TOKEN', '')
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'

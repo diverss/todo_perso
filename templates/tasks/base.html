@@ -346,6 +346,9 @@
 </div>
 
 {% load static %}
+<script>
+window.TODO_USER_ID = '{{ request.user.pk|escapejs }}';
+</script>
 <script src="{% static 'tasks/pwa.js' %}"></script>
 <script src="{% static 'tasks/app.js' %}"></script>
 

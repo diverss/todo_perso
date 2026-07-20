@@ -14,18 +14,23 @@
     <div class="login-logo">&#10003;</div>
     <h1 class="login-title">Todo Perso</h1>
 
-    <form method="post" action="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next }}{% endif %}">
+    <form method="post" action="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">
       {% csrf_token %}
       <div class="form-group">
-        <label class="form-label">Token d'accès</label>
-        <input type="password" name="token" class="form-input form-input-title"
-               placeholder="Entrez votre token" autofocus autocomplete="current-password">
+        <label class="form-label">Identifiant</label>
+        <input type="text" name="username" class="form-input form-input-title"
+               placeholder="Identifiant" autofocus autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe</label>
+        <input type="password" name="password" class="form-input"
+               placeholder="Mot de passe" autocomplete="current-password" required>
       </div>
       {% if error %}
       <p class="login-error">{{ error }}</p>
       {% endif %}
       <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px">
-        Accéder
+        Se connecter
       </button>
     </form>
   </div>
