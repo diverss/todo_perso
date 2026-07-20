@@ -118,20 +118,23 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .label-action-btn { opacity: 0; font-size: 16px; color: var(--text-muted); }
 .nav-item:hover .label-action-btn { opacity: 1; }
 
-.nav-drag-handle {
+.nav-drag-handle,
+.drag-handle {
   width: 10px;
   height: 18px;
   flex-shrink: 0;
   cursor: grab;
-  opacity: 0.3;
   transition: opacity var(--transition);
   user-select: none;
   touch-action: none;
   position: relative;
 }
+.nav-drag-handle { opacity: 0.3; }
 /* Grille 2×3 points dessinée en CSS pur */
 .nav-drag-handle::before,
-.nav-drag-handle::after {
+.nav-drag-handle::after,
+.drag-handle::before,
+.drag-handle::after {
   content: '';
   position: absolute;
   top: 3px;
@@ -141,8 +144,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   border-radius: 50%;
   box-shadow: 0 5px 0 #888, 0 10px 0 #888;
 }
-.nav-drag-handle::before { left: 1px; }
-.nav-drag-handle::after  { left: 6px; }
+.nav-drag-handle::before,
+.drag-handle::before { left: 1px; }
+.nav-drag-handle::after,
+.drag-handle::after  { left: 6px; }
 .nav-item:hover .nav-drag-handle { opacity: 0.8; }
 .nav-item-ghost { opacity: 0.4; background: var(--bg3); border-radius: var(--radius); }
 .nav-separator { height: 1px; background: var(--border); margin: 8px 12px; }
@@ -406,15 +411,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .task-item:hover .task-add-subtask-btn { opacity: 1; }
 
 .drag-handle {
-  color: var(--text-muted);
-  font-size: 16px;
-  cursor: grab;
-  padding: 0 2px;
-  flex-shrink: 0;
   opacity: 0;
-  transition: opacity var(--transition);
-  user-select: none;
-  touch-action: none;
 }
 .drag-handle:active { cursor: grabbing; }
 .task-item:hover .drag-handle { opacity: 1; }
