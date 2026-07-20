@@ -124,6 +124,12 @@ def _parse_due_date(value):
     return parse_date(value)
 
 
+def _local_redirect_url(value):
+    if value and value.startswith('/') and not value.startswith('//'):
+        return value
+    return ''
+
+
 def _is_stale_task_operation(request, task):
     op_dt = _offline_operation_datetime(request)
     return bool(op_dt and task.updated_at and op_dt < task.updated_at)
@@ -360,9 +366,13 @@ def task_create(request):
         updated_at=op_dt,
     )
 
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({'id': task.pk, 'title': task.title})
+    back = _local_redirect_url(request.POST.get('back', ''))
 
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({'id': task.pk, 'title': task.title, 'redirect_url': back})
+
+    if back:
+        return redirect(back)
     if parent:
         return redirect('task_detail', task_id=parent.pk)
     if section:
@@ -375,9 +385,7 @@ def task_create(request):
 def task_detail(request, task_id):
     task = get_object_or_404(Task, pk=task_id, user=request.user)
     subtasks = task.subtasks.filter(user=request.user, completed=False)
-    back_url = request.GET.get('back', '')
-    if not back_url.startswith('/'):
-        back_url = ''
+    back_url = _local_redirect_url(request.GET.get('back', ''))
     if not back_url and task.project.is_inbox and task.parent is None:
         ids = list(
             Task.objects.filter(project=task.project, completed=False, parent__isnull=True)
@@ -448,8 +456,8 @@ def task_edit(request, task_id):
     if old_section_id and old_parent_id is None and not old_completed:
         _move_section_to_end_if_empty(old_section_id, request.user)
 
-    back = request.POST.get('back', '')
-    if back and back.startswith('/'):
+    back = _local_redirect_url(request.POST.get('back', ''))
+    if back:
         return redirect(back)
     if task.parent_id:
         return redirect('task_detail', task_id=task.parent_id)
@@ -484,11 +492,11 @@ def task_delete(request, task_id):
     parent_id = task.parent.pk if task.parent else None
     old_section_id = task.section_id if task.parent_id is None and not task.completed else None
 
-    back = request.POST.get('back', '')
+    back = _local_redirect_url(request.POST.get('back', ''))
     task.delete()
     _move_section_to_end_if_empty(old_section_id, request.user)
 
-    if back and back.startswith('/'):
+    if back:
         return redirect(back)
     if parent_id:
         return redirect('task_detail', task_id=parent_id)
@@ -579,7 +587,7 @@ def label_edit(request, label_id):
 def label_delete(request, label_id):
     label = get_object_or_404(Label, pk=label_id, user=request.user)
     label.delete()
-    return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'ok', 'default_url': reverse('index')})
 
 
 def get_sections_for_project(request, project_id):

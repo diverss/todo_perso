@@ -260,19 +260,58 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.section-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
   }
 
+  function nearestColIndex(scrollLeft) {
+    const c = cols();
+    if (!c.length) return -1;
+    let idx = 0;
+    let distance = Math.abs(c[0].offsetLeft - scrollLeft);
+    c.forEach((col, i) => {
+      const nextDistance = Math.abs(col.offsetLeft - scrollLeft);
+      if (nextDistance < distance) {
+        idx = i;
+        distance = nextDistance;
+      }
+    });
+    return idx;
+  }
+
+  function setActiveTab(idx) {
+    document.querySelectorAll('.section-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+  }
+
+  function cleanViewStateParams() {
+    const params = new URLSearchParams(location.search);
+    params.delete('section');
+    params.delete('scroll');
+    const nextSearch = params.toString();
+    history.replaceState(null, '', `${location.pathname}${nextSearch ? `?${nextSearch}` : ''}`);
+  }
+
   // Onglets (mobile + desktop)
   document.querySelectorAll('.section-tab').forEach(tab => {
     tab.addEventListener('click', () => goTo(parseInt(tab.dataset.col)));
   });
 
-  // Restaurer la section après création d'une tâche (?section=ID)
-  const targetSectionId = new URLSearchParams(location.search).get('section');
-  if (targetSectionId) {
+  // Restaurer l'état de vue après retour depuis une tâche.
+  const params = new URLSearchParams(location.search);
+  const targetSectionId = params.get('section');
+  const targetScroll = parseInt(params.get('scroll') || '', 10);
+  let restoredViewState = false;
+  if (!Number.isNaN(targetScroll) && window.innerWidth > 700) {
+    board.scrollLeft = Math.max(0, targetScroll);
+    const idx = nearestColIndex(board.scrollLeft);
+    if (idx >= 0) {
+      currentIdx = idx;
+      setActiveTab(idx);
+    }
+    restoredViewState = true;
+  } else if (targetSectionId) {
     const allCols = cols();
     const idx = allCols.findIndex(c => c.dataset.sectionId === targetSectionId);
     if (idx >= 0) goTo(idx, false);
-    history.replaceState(null, '', location.pathname); // nettoyer l'URL
+    restoredViewState = true;
   }
+  if (restoredViewState) cleanViewStateParams();
 
   // Swipe mobile : exactement ±1 section, quelle que soit la vélocité
   if (window.innerWidth <= 700) {

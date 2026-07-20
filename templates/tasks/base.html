@@ -280,6 +280,7 @@
     <form method="post" action="{% url 'task_create' %}" id="formAddTask">
       {% csrf_token %}
       <input type="hidden" name="parent_id" id="addTaskParentId">
+      <input type="hidden" name="back" id="addTaskBack" value="{{ request.get_full_path }}">
       <div class="form-group">
         <input type="text" name="title" class="form-input form-input-title" placeholder="Titre de la tâche" required autofocus>
       </div>

@@ -11,6 +11,68 @@ function focusModalNameInput(id) {
   setTimeout(() => document.querySelector(`#${id} input[name="name"]`)?.focus(), 50);
 }
 
+function _isSafeLocalPath(value) {
+  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+}
+
+function _currentProjectSectionId() {
+  const board = document.getElementById('sectionsBoard');
+  if (!board) return '';
+
+  const activeTab = document.querySelector('.section-tab.active');
+  const activeCol = activeTab ? board.querySelector(`.section-col[data-col="${activeTab.dataset.col}"]`) : null;
+  if (activeCol?.dataset.sectionId) return activeCol.dataset.sectionId;
+
+  const cols = [...board.querySelectorAll('.section-col')];
+  if (!cols.length) return '';
+
+  const left = board.scrollLeft;
+  let closest = cols[0];
+  let closestDistance = Math.abs(cols[0].offsetLeft - left);
+  for (const col of cols.slice(1)) {
+    const distance = Math.abs(col.offsetLeft - left);
+    if (distance < closestDistance) {
+      closest = col;
+      closestDistance = distance;
+    }
+  }
+  return closest?.dataset.sectionId || '';
+}
+
+function currentViewBackUrl() {
+  const url = new URL(window.location.href);
+  url.hash = '';
+
+  const board = document.getElementById('sectionsBoard');
+  if (board && /^\/project\/\d+\/$/.test(url.pathname)) {
+    const sectionId = _currentProjectSectionId();
+    if (sectionId) url.searchParams.set('section', sectionId);
+    if (window.innerWidth > 700) {
+      url.searchParams.set('scroll', String(Math.round(board.scrollLeft)));
+    } else {
+      url.searchParams.delete('scroll');
+    }
+  }
+
+  return `${url.pathname}${url.search}`;
+}
+window.currentViewBackUrl = currentViewBackUrl;
+
+function _taskHrefWithCurrentBack(href) {
+  try {
+    const url = new URL(href, window.location.href);
+    if (url.origin !== window.location.origin || !/^\/task\/\d+\/$/.test(url.pathname)) return href;
+    url.searchParams.set('back', currentViewBackUrl());
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch (_) {
+    return href;
+  }
+}
+
+function _isPlainNavigationClick(e) {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
 document.addEventListener('click', e => {
   const closeBtn = e.target.closest('.modal-close');
   if (closeBtn) {
@@ -39,7 +101,14 @@ document.addEventListener('click', e => {
   if (!item) return;
   if (e.target.closest('a, button, input, textarea, select, label, .drag-handle')) return;
   if (window.getSelection?.().toString()) return;
-  window.location.href = item.dataset.href;
+  window.location.href = _taskHrefWithCurrentBack(item.dataset.href);
+});
+
+document.addEventListener('click', e => {
+  const link = e.target.closest('.task-item[data-href] a[href*="/task/"]');
+  if (!link || !_isPlainNavigationClick(e) || link.target && link.target !== '_self') return;
+  e.preventDefault();
+  window.location.href = _taskHrefWithCurrentBack(link.getAttribute('href'));
 });
 
 /* ── Search field clear ── */
@@ -265,15 +334,21 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('deleteLabelBtn')?.addEventListener('click', async () => {
     if (!confirm('Supprimer cette étiquette ?')) return;
     const id = document.getElementById('editLabelId').value;
+    const isCurrentLabel = window.location.pathname === `/label/${id}/`;
     if (!navigator.onLine) {
       await queueOfflineOp(`/label/${id}/delete/`, 'form', {}, 'Supprimer étiquette');
       closeModal('modalEditLabel');
+      if (isCurrentLabel) location.href = '/';
       return;
     }
     const fd = new FormData();
     fd.append('csrfmiddlewaretoken', getCsrf());
     const res = await fetch(`/label/${id}/delete/`, { method: 'POST', body: fd });
-    if (res.ok) location.reload();
+    if (res.ok) {
+      const data = await res.json();
+      if (isCurrentLabel) location.href = data.default_url || '/';
+      else location.reload();
+    }
   });
 });
 
@@ -313,6 +388,8 @@ function openAddTask(projectId, sectionId, parentId, titleHint) {
   const projSel = document.getElementById('addTaskProjectSelect');
   if (projSel && projectId) projSel.value = projectId;
   document.getElementById('addTaskParentId').value = parentId || '';
+  const backInput = document.getElementById('addTaskBack');
+  if (backInput) backInput.value = currentViewBackUrl();
   if (titleHint) document.getElementById('modalAddTaskTitle').textContent = titleHint;
   _clearPendingImages();
   _loadSectionsIntoModal(projectId, sectionId);
@@ -444,6 +521,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const projectId = document.getElementById('addTaskProjectSelect')?.value;
     const sectionId = document.getElementById('addTaskSectionSelect')?.value;
     const parentId  = document.getElementById('addTaskParentId').value;
+    const back = task.redirect_url || fd.get('back');
+    if (_isSafeLocalPath(back)) {
+      location.href = back;
+      return;
+    }
     if (parentId)      location.href = `/task/${parentId}/`;
     else if (sectionId) location.href = `/project/${projectId}/?section=${sectionId}`;
     else               location.href = `/project/${projectId}/`;

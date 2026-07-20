@@ -9,7 +9,9 @@ from django.utils import timezone
 
 from .models import Label, Project, Section, Task
 from .views import (
+    label_delete,
     label_view,
+    project_delete,
     project_view,
     section_favorite_reorder,
     section_toggle_favorite,
@@ -364,6 +366,101 @@ class TaskDueDateTests(TestCase):
 
         self.assertContains(project_response, '<span class="task-due-date">05/08/2026</span>', html=True)
         self.assertContains(label_response, '<span class="task-due-date">05/08/2026</span>', html=True)
+
+
+class TaskReturnNavigationTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('user-return')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+        self.section = Section.objects.create(user=self.user, name='Section', project=self.project)
+
+    def test_task_create_redirects_to_back_with_view_state(self):
+        back = f'/project/{self.project.pk}/?section={self.section.pk}&scroll=240'
+        request = with_user(self.factory.post('/task/create/', data={
+            'title': 'Acheter du pain',
+            'description': '',
+            'priority': 4,
+            'project_id': self.project.pk,
+            'section_id': self.section.pk,
+            'parent_id': '',
+            'label_id': '',
+            'back': back,
+        }), self.user)
+
+        response = task_create(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], back)
+
+    def test_task_create_ajax_returns_redirect_url(self):
+        back = '/search/?q=pain'
+        request = with_user(self.factory.post(
+            '/task/create/',
+            data={
+                'title': 'Acheter du pain',
+                'description': '',
+                'priority': 4,
+                'project_id': self.project.pk,
+                'section_id': '',
+                'parent_id': '',
+                'label_id': '',
+                'back': back,
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        ), self.user)
+
+        response = task_create(request)
+
+        self.assertJSONEqual(response.content, {
+            'id': Task.objects.get(title='Acheter du pain').pk,
+            'title': 'Acheter du pain',
+            'redirect_url': back,
+        })
+
+    def test_task_edit_redirects_to_back_with_view_state(self):
+        task = Task.objects.create(user=self.user, title='Acheter du pain', project=self.project, section=self.section)
+        back = f'/project/{self.project.pk}/?section={self.section.pk}&scroll=240'
+        request = with_user(self.factory.post(f'/task/{task.pk}/edit/', data={
+            'title': task.title,
+            'description': '',
+            'priority': task.priority,
+            'project_id': self.project.pk,
+            'section_id': self.section.pk,
+            'parent_id': '',
+            'label_id': '',
+            'back': back,
+        }), self.user)
+
+        response = task_edit(request, task.pk)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], back)
+
+
+class DefaultViewRedirectTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('user-default-redirect')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+        self.label = Label.objects.create(user=self.user, name='Courses')
+
+    def test_label_delete_returns_default_url(self):
+        request = with_user(self.factory.post(f'/label/{self.label.pk}/delete/'), self.user)
+
+        response = label_delete(request, self.label.pk)
+
+        self.assertJSONEqual(response.content, {'status': 'ok', 'default_url': '/'})
+        self.assertFalse(Label.objects.filter(pk=self.label.pk).exists())
+
+    def test_project_delete_redirects_to_default_entrypoint(self):
+        request = with_user(self.factory.post(f'/project/{self.project.pk}/delete/'), self.user)
+
+        response = project_delete(request, self.project.pk)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], '/')
+        self.assertFalse(Project.objects.filter(pk=self.project.pk).exists())
 
 
 class OfflineTaskConflictTests(TestCase):
