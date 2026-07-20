@@ -728,6 +728,38 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
 /* Quand la bannière est affichée, pousser le contenu vers le bas */
 body.is-offline .app-layout { margin-top: 36px; }
 
+/* ── Mise à jour disponible ── */
+.app-update-prompt {
+  display: none;
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 550;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 28px));
+  padding: 9px 10px 9px 14px;
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 26px rgba(0,0,0,.38);
+  font-size: 13px;
+}
+.app-update-prompt.show { display: flex; }
+.app-update-prompt button {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.app-update-prompt button:hover { filter: brightness(1.08); }
+
 /* ── Toast notification ── */
 .pwa-toast {
   position: fixed;
@@ -759,7 +791,15 @@ body.is-offline .app-layout { margin-top: 36px; }
 ::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
 
 /* ── Utilitaires responsive ── */
-@media (max-width: 700px) { .desktop-only { display: none !important; } }
+@media (max-width: 700px) {
+  .desktop-only { display: none !important; }
+  .app-update-prompt {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    justify-content: space-between;
+  }
+}
 
 /* ── Export Obsidian ── */
 .obsidian-file-list { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 12px; }
