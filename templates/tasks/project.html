@@ -20,7 +20,7 @@
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <button class="btn btn-ghost btn-sm" onclick="openAddSection()">+ Section</button>
-    <button class="btn btn-primary btn-sm"
+    <button class="btn btn-ghost btn-sm"
             onclick="openAddTask('{{ project.pk }}', null, null, 'Nouvelle tâche')">+ Tâche</button>
   </div>
 </div>
@@ -77,9 +77,9 @@
     <div class="section-header">
       <span class="section-name" id="sectionName-{{ section.pk }}">{{ section.name }}</span>
       <div class="section-actions">
-        <button class="btn-icon"
+        <button class="btn btn-primary btn-sm section-add-task-btn"
                 onclick="openAddTask('{{ project.pk }}', '{{ section.pk }}', null, '{{ section.name|escapejs }}')"
-                title="Ajouter une tâche">+</button>
+                title="Ajouter une tâche">+ Tâche</button>
         <div class="dropdown">
           <button class="btn-icon" onclick="toggleDropdown('sectionDrop-{{ section.pk }}')">&#8943;</button>
           <div class="dropdown-menu" id="sectionDrop-{{ section.pk }}">

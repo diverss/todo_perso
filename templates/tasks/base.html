@@ -132,6 +132,9 @@
     <div class="mobile-topbar">
       <button class="btn-icon mobile-menu-btn" id="mobileMenuBtn" title="Menu">&#9776;</button>
       <span class="app-logo-mobile">&#10003; Todo</span>
+      <button class="btn btn-primary btn-sm mobile-inbox-add-btn"
+              onclick="openAddTask('{{ inbox.pk }}', null, null, 'A trier')"
+              title="Ajouter à A trier">+ A trier</button>
     </div>
 
     {% block content %}{% endblock %}

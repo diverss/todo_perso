@@ -159,6 +159,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 }
 .app-logo-mobile { font-weight: 700; font-size: 16px; }
 .mobile-menu-btn { font-size: 18px; }
+.mobile-inbox-add-btn { flex-shrink: 0; }
 
 /* Sidebar backdrop (mobile) */
 .sidebar-backdrop {
@@ -294,8 +295,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   padding: 10px 10px 8px;
   border-bottom: 1px solid var(--border);
 }
-.section-name { font-weight: 600; flex: 1; font-size: 13px; }
-.section-actions { display: flex; gap: 2px; }
+.section-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.section-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.section-add-task-btn { padding: 3px 8px; }
 .section-tasks { padding: 4px 4px 8px; min-height: 40px; }
 
 /* Mobile: slider par transform — aucun bord visible */
