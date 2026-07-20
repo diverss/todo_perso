@@ -12,7 +12,7 @@
 
 <div class="label-tasks-list" id="inboxTaskList">
   {% for task in tasks %}
-  <div class="task-item" data-task-id="{{ task.pk }}">
+  <div class="task-item" data-task-id="{{ task.pk }}" data-href="{% url 'task_detail' task.pk %}">
     <div class="task-row">
       <button class="task-complete-btn"
               data-task-id="{{ task.pk }}"

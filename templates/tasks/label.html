@@ -11,7 +11,7 @@
 
 <div class="label-tasks-list" id="labelTaskList" data-label-id="{{ label.pk }}">
   {% for task in tasks %}
-  <div class="task-item" data-task-id="{{ task.pk }}">
+  <div class="task-item" data-task-id="{{ task.pk }}" data-href="{% url 'task_detail' task.pk %}?back={% url 'label' label.pk %}">
     <div class="task-row">
       <button class="task-complete-btn"
               data-task-id="{{ task.pk }}"

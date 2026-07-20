@@ -325,10 +325,9 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   border-radius: var(--radius);
   border-bottom: 1px solid var(--border);
   transition: background var(--transition);
-  cursor: grab;
+  cursor: pointer;
 }
 .task-item:last-child { border-bottom: none; }
-.task-item:active { cursor: grabbing; }
 .task-item.sortable-ghost { opacity: .4; background: var(--bg3); }
 .task-item.sortable-drag { background: var(--bg2); box-shadow: 0 4px 20px rgba(0,0,0,.4); }
 .task-item:hover { background: var(--bg2); }
@@ -384,6 +383,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
   user-select: none;
   touch-action: none;
 }
+.drag-handle:active { cursor: grabbing; }
 .task-item:hover .drag-handle { opacity: 1; }
 @media (max-width: 700px) {
   .drag-handle { opacity: 0.4; } /* toujours visible sur mobile */

@@ -1,6 +1,9 @@
 {% for task in tasks %}
 {% if not task.completed and not task.parent_id %}
-<div class="task-item" data-task-id="{{ task.pk }}" data-order="{{ task.order }}">
+<div class="task-item"
+     data-task-id="{{ task.pk }}"
+     data-order="{{ task.order }}"
+     data-href="{% url 'task_detail' task.pk %}?back={% url 'project' task.project.pk %}{% if task.section %}%3Fsection={{ task.section.pk }}{% endif %}">
   <div class="task-row">
     <button class="task-complete-btn"
             data-task-id="{{ task.pk }}"

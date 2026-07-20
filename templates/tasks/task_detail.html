@@ -132,7 +132,10 @@
          data-project="{{ task.project.pk }}"
          data-parent="{{ task.pk }}">
       {% for sub in subtasks %}
-      <div class="task-item task-item-sub" data-task-id="{{ sub.pk }}" data-order="{{ sub.order }}">
+      <div class="task-item task-item-sub"
+           data-task-id="{{ sub.pk }}"
+           data-order="{{ sub.order }}"
+           data-href="{% url 'task_detail' sub.pk %}">
         <div class="task-row">
           <button class="task-complete-btn"
                   data-task-id="{{ sub.pk }}"

@@ -30,6 +30,15 @@ document.addEventListener('keydown', e => {
   }
 });
 
+/* ── Task item navigation ── */
+document.addEventListener('click', e => {
+  const item = e.target.closest('.task-item[data-href]');
+  if (!item) return;
+  if (e.target.closest('a, button, input, textarea, select, label, .drag-handle')) return;
+  if (window.getSelection?.().toString()) return;
+  window.location.href = item.dataset.href;
+});
+
 /* ── Textareas resize handle élargi ── */
 const TEXTAREA_RESIZE_ZONE_W = 56;
 const TEXTAREA_RESIZE_ZONE_H = 36;
