@@ -63,11 +63,11 @@
 <div class="settings-card">
   <h2 class="settings-section-title">Taille du projet</h2>
   <table class="settings-table">
-    <tr><td>Base de données</td><td><strong>{{ db_size }}</strong></td></tr>
-    <tr><td>Images ({{ image_count }})</td><td><strong>{{ media_size }}</strong></td></tr>
-    <tr class="settings-table-total"><td>Total</td><td><strong>{{ total_size }}</strong></td></tr>
-    <tr><td>Tâches actives</td><td><strong>{{ task_count }}</strong></td></tr>
-    <tr><td>Tâches terminées</td><td><strong>{{ completed_count }}</strong></td></tr>
+    <tr><td>Mes données</td><td><strong id="statDbSize">{{ db_size }}</strong></td></tr>
+    <tr><td>Images (<span id="statImageCount">{{ image_count }}</span>)</td><td><strong id="statMediaSize">{{ media_size }}</strong></td></tr>
+    <tr class="settings-table-total"><td>Total</td><td><strong id="statTotalSize">{{ total_size }}</strong></td></tr>
+    <tr><td>Tâches actives</td><td><strong id="statTaskCount">{{ task_count }}</strong></td></tr>
+    <tr><td>Tâches terminées</td><td><strong id="statCompletedCount">{{ completed_count }}</strong></td></tr>
   </table>
 </div>
 
@@ -100,6 +100,13 @@ document.getElementById('purgeBtn').addEventListener('click', async () => {
   const el = document.getElementById('purgeResult');
   el.textContent = `${data.deleted} tâche${data.deleted !== 1 ? 's' : ''} supprimée${data.deleted !== 1 ? 's' : ''}.`;
   el.style.display = 'block';
+
+  document.getElementById('statDbSize').textContent = data.db_size;
+  document.getElementById('statMediaSize').textContent = data.media_size;
+  document.getElementById('statImageCount').textContent = data.image_count;
+  document.getElementById('statTotalSize').textContent = data.total_size;
+  document.getElementById('statTaskCount').textContent = data.task_count;
+  document.getElementById('statCompletedCount').textContent = data.completed_count;
 });
 </script>
 {% endblock %}

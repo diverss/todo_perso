@@ -7,17 +7,19 @@ from django.urls import resolve
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
-from .models import Label, Project, Section, Task
+from .models import AppSettings, Label, Project, Section, Task, TaskImage
 from .views import (
     label_delete,
     label_view,
     project_delete,
     project_view,
+    purge_completed,
     section_create,
     section_favorite_reorder,
     section_restore_completed_tasks,
     section_toggle_favorite,
     search_view,
+    settings_view,
     task_create,
     task_complete,
     task_delete,
@@ -227,7 +229,7 @@ class SectionRecurringTasksTests(TestCase):
         section = Section.objects.get(name='Maison')
         self.assertTrue(section.has_recurring_tasks)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], f'/project/{self.project.pk}/')
+        self.assertEqual(response['Location'], f'/project/{self.project.pk}/?section={section.pk}')
 
     @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
     def test_project_view_renders_recurring_section_modal(self):
@@ -468,6 +470,87 @@ class AuthFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], '/')
         self.assertEqual(int(self.client.session['_auth_user_id']), self.user.pk)
+
+
+class SettingsViewTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('user-settings')
+        self.other = make_user('user-settings-other')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+        self.other_project = Project.objects.create(user=self.other, name='Projet autre')
+
+    def test_post_saves_default_project_view(self):
+        request = with_user(self.factory.post('/settings/', data={
+            'default_view_type': 'project',
+            'default_project_id': self.project.pk,
+            'default_label_id': '',
+        }), self.user)
+        response = settings_view(request)
+
+        self.assertEqual(response.status_code, 302)
+        settings = AppSettings.load(self.user)
+        self.assertEqual(settings.default_view_type, AppSettings.VIEW_PROJECT)
+        self.assertEqual(settings.default_project, self.project)
+        self.assertIsNone(settings.default_label)
+
+    def test_post_rejects_unknown_view_type(self):
+        request = with_user(self.factory.post('/settings/', data={
+            'default_view_type': 'not-a-real-choice',
+            'default_project_id': '',
+            'default_label_id': '',
+        }), self.user)
+        settings_view(request)
+
+        settings = AppSettings.load(self.user)
+        self.assertEqual(settings.default_view_type, AppSettings.VIEW_FIRST_PROJECT)
+
+    def test_post_rejects_another_users_project(self):
+        request = with_user(self.factory.post('/settings/', data={
+            'default_view_type': 'project',
+            'default_project_id': self.other_project.pk,
+            'default_label_id': '',
+        }), self.user)
+
+        with self.assertRaises(Http404):
+            settings_view(request)
+
+
+class PurgeCompletedTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('user-purge')
+        self.project = Project.objects.create(user=self.user, name='Projet')
+
+    def test_purge_deletes_completed_tasks_and_images_and_returns_stats(self):
+        active = Task.objects.create(user=self.user, title='Active', project=self.project)
+        done = Task.objects.create(user=self.user, title='Terminée', project=self.project, completed=True)
+        image = TaskImage.objects.create(task=done, original_filename='photo.png', file_size=100)
+
+        request = with_user(self.factory.post('/purge-completed/'), self.user)
+        response = purge_completed(request)
+        data = json.loads(response.content)
+
+        # tasks.delete() renvoie le total d'objets supprimés en cascade (1 tâche + 1 image).
+        self.assertEqual(data['deleted'], 2)
+        self.assertEqual(data['task_count'], 1)
+        self.assertEqual(data['completed_count'], 0)
+        self.assertEqual(data['image_count'], 0)
+        self.assertTrue(Task.objects.filter(pk=active.pk).exists())
+        self.assertFalse(Task.objects.filter(pk=done.pk).exists())
+        self.assertFalse(TaskImage.objects.filter(pk=image.pk).exists())
+
+    def test_purge_does_not_touch_other_users_tasks(self):
+        other = make_user('user-purge-other')
+        other_project = Project.objects.create(user=other, name='Projet autre')
+        other_task = Task.objects.create(
+            user=other, title='Terminée autre', project=other_project, completed=True
+        )
+
+        request = with_user(self.factory.post('/purge-completed/'), self.user)
+        purge_completed(request)
+
+        self.assertTrue(Task.objects.filter(pk=other_task.pk).exists())
 
 
 class TaskDueDateTests(TestCase):

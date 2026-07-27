@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.db import connection
 from django.db.models import Max, Q
 from django.conf import settings as django_settings
 
@@ -292,13 +293,14 @@ def section_create(request, project_id):
     name = request.POST.get('name', '').strip()
     if name:
         order = project.sections.filter(user=request.user).count()
-        Section.objects.create(
+        section = Section.objects.create(
             user=request.user,
             name=name,
             project=project,
             order=order,
             has_recurring_tasks=request.POST.get('has_recurring_tasks') == '1',
         )
+        return redirect(f"{reverse('project', args=[project.pk])}?section={section.pk}")
     return redirect('project', project_id=project.pk)
 
 
@@ -314,7 +316,7 @@ def section_edit(request, section_id):
         return redirect('project', project_id=origin_project_id)
     section.name = request.POST.get('name', section.name).strip()
     section.save()
-    return redirect('project', project_id=section.project.pk)
+    return redirect(f"{reverse('project', args=[section.project.pk])}?section={section.pk}")
 
 
 @require_POST
@@ -707,6 +709,7 @@ def app_revision(request):
         f'l:{_revision_rows(Label.objects.filter(user=user), "name", "color", "order")}',
         f't:{_revision_rows(Task.objects.filter(user=user), "project_id", "section_id", "parent_id", "label_id", "due_date", "priority", "order", "label_order", "completed", "updated_at")}',
         f'i:{_revision_rows(TaskImage.objects.filter(task__user=user), "task_id", "uploaded_at")}',
+        f'a:{_revision_rows(AppSettings.objects.filter(user=user), "default_view_type", "default_project_id", "default_label_id")}',
     ]
 
     response = JsonResponse({'revision': '|'.join(parts) or 'missing'})
@@ -719,25 +722,18 @@ def app_revision(request):
 def settings_view(request):
     settings = AppSettings.load(request.user)
     if request.method == 'POST':
-        settings.default_view_type = request.POST.get('default_view_type', AppSettings.VIEW_FIRST_PROJECT)
+        view_type = request.POST.get('default_view_type', AppSettings.VIEW_FIRST_PROJECT)
+        if view_type not in dict(AppSettings.VIEW_CHOICES):
+            view_type = AppSettings.VIEW_FIRST_PROJECT
+        settings.default_view_type = view_type
         pid = request.POST.get('default_project_id') or None
         lid = request.POST.get('default_label_id') or None
         settings.default_project = get_object_or_404(Project, pk=pid, user=request.user) if pid else None
         settings.default_label = get_object_or_404(Label, pk=lid, user=request.user) if lid else None
         settings.save()
         return redirect('settings')
-    db = _db_size()
-    media = _media_size(request.user)
     ctx = _sidebar_context(request.user)
-    ctx.update({
-        'settings': settings,
-        'db_size': _format_size(db),
-        'media_size': _format_size(media),
-        'total_size': _format_size(db + media),
-        'task_count': Task.objects.filter(user=request.user, completed=False).count(),
-        'completed_count': Task.objects.filter(user=request.user, completed=True).count(),
-        'image_count': TaskImage.objects.filter(task__user=request.user).count(),
-    })
+    ctx.update({'settings': settings, **_settings_stats(request.user)})
     return render(request, 'tasks/settings.html', ctx)
 
 
@@ -748,7 +744,7 @@ def purge_completed(request):
     for img in TaskImage.objects.filter(task__in=tasks):
         img.image.delete(save=False)
     count, _ = tasks.delete()
-    return JsonResponse({'deleted': count})
+    return JsonResponse({'deleted': count, **_settings_stats(request.user)})
 
 
 # ── Images ──
@@ -796,12 +792,64 @@ def _format_size(n):
     if n < 1024**2:    return f'{n/1024:.1f} Ko'
     return             f'{n/1024**2:.1f} Mo'
 
-def _db_size():
-    p = django_settings.DATABASES['default']['NAME']
-    return os.path.getsize(str(p)) if os.path.exists(str(p)) else 0
+_USER_OWNED_TABLES = ['tasks_project', 'tasks_section', 'tasks_label', 'tasks_task', 'tasks_appsettings']
+
+
+def _db_size_postgresql(user):
+    total = 0
+    with connection.cursor() as cursor:
+        for table in _USER_OWNED_TABLES:
+            cursor.execute(f'SELECT COALESCE(SUM(pg_column_size(t.*)), 0) FROM {table} t WHERE t.user_id = %s', [user.pk])
+            total += cursor.fetchone()[0]
+        cursor.execute(
+            'SELECT COALESCE(SUM(pg_column_size(ti.*)), 0) '
+            'FROM tasks_taskimage ti JOIN tasks_task t ON t.id = ti.task_id '
+            'WHERE t.user_id = %s',
+            [user.pk],
+        )
+        total += cursor.fetchone()[0]
+    return total
+
+
+def _db_size_fallback(user):
+    # Pas d'équivalent à pg_column_size hors PostgreSQL (ex. SQLite en dev/test) :
+    # on estime la taille en sommant la représentation UTF-8 de chaque valeur de colonne.
+    total = 0
+    querysets = [
+        Project.objects.filter(user=user),
+        Section.objects.filter(user=user),
+        Label.objects.filter(user=user),
+        Task.objects.filter(user=user),
+        AppSettings.objects.filter(user=user),
+        TaskImage.objects.filter(task__user=user),
+    ]
+    for qs in querysets:
+        for row in qs.values():
+            for value in row.values():
+                if value is not None:
+                    total += len(str(value).encode('utf-8'))
+    return total
+
+
+def _db_size(user):
+    if connection.vendor == 'postgresql':
+        return _db_size_postgresql(user)
+    return _db_size_fallback(user)
 
 def _media_size(user):
     return sum(TaskImage.objects.filter(task__user=user).values_list('file_size', flat=True))
+
+def _settings_stats(user):
+    db = _db_size(user)
+    media = _media_size(user)
+    return {
+        'db_size': _format_size(db),
+        'media_size': _format_size(media),
+        'total_size': _format_size(db + media),
+        'task_count': Task.objects.filter(user=user, completed=False).count(),
+        'completed_count': Task.objects.filter(user=user, completed=True).count(),
+        'image_count': TaskImage.objects.filter(task__user=user).count(),
+    }
 
 
 @require_POST

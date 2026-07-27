@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Label, Project, Section, Task, TaskImage
+from .models import AppSettings, Label, Project, Section, Task, TaskImage
 
 
 @admin.register(Label)
@@ -34,3 +34,10 @@ class TaskAdmin(admin.ModelAdmin):
 class TaskImageAdmin(admin.ModelAdmin):
     list_display = ['original_filename', 'task', 'uploaded_at']
     search_fields = ['original_filename', 'task__title', 'task__user__username']
+
+
+@admin.register(AppSettings)
+class AppSettingsAdmin(admin.ModelAdmin):
+    list_display = ['user', 'default_view_type', 'default_project', 'default_label']
+    list_filter = ['default_view_type']
+    search_fields = ['user__username']

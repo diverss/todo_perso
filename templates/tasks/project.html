@@ -371,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       board.scrollTo({ left: c[idx].offsetLeft, behavior: animate ? 'smooth' : 'instant' });
     }
-    document.querySelectorAll('.section-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+    setActiveTab(idx);
   }
 
   function nearestColIndex(scrollLeft) {
@@ -389,8 +389,14 @@ document.addEventListener('DOMContentLoaded', () => {
     return idx;
   }
 
+  function scrollActiveTabIntoView() {
+    if (window.innerWidth > 700) return;
+    document.querySelector('.section-tab.active')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
+
   function setActiveTab(idx) {
     document.querySelectorAll('.section-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+    scrollActiveTabIntoView();
   }
 
   function cleanViewStateParams() {
@@ -435,6 +441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     restoredViewState = true;
   }
   if (restoredViewState) cleanViewStateParams();
+  scrollActiveTabIntoView();
 
   // Swipe mobile : exactement ±1 section, quelle que soit la vélocité
   if (window.innerWidth <= 700) {

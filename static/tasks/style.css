@@ -592,7 +592,14 @@ label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom
   overflow-wrap: anywhere;
 }
 .description-links-list a:hover { text-decoration: underline; }
-.form-select { appearance: none; }
+.form-select {
+  appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 6px;
+}
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 500px) { .form-row { grid-template-columns: 1fr; } }
 .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
