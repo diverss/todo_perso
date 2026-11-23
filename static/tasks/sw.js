@@ -6,7 +6,8 @@
  *   - POST                → laissé passer (géré par pwa.js côté client)
  */
 
-const CACHE = 'todo-v30';
+// Incrémenter après migration serveur / déploiement pour purger les caches navigateur
+const CACHE = 'todo-v31-notgmail-vps';
 
 // Pré-cache minimal (shell de l'app)
 const PRECACHE = [

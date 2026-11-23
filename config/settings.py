@@ -74,3 +74,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
+
+# Surcharges locales (prod) — fichier non versionné, voir settings_local.py.example
+try:
+    from .settings_local import *  # noqa: F401,F403
+except ImportError:
+    pass

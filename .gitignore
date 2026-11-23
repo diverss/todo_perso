@@ -1,6 +1,9 @@
-# Base de données
+# Base de données locale
 db.sqlite3
 
+# Secrets / env local (prod)
+.env
+config/settings_local.py
 # Fichiers média uploadés
 media/
 
@@ -16,6 +19,13 @@ env/
 staticfiles/
 *.log
 
+# Runtime / logs locaux
+logs/
+run/
+
+# Déploiement : dumps et archives one-shot (ne pas merger de gros dumps)
+deploy/archive/
+deploy/**/*.json
+
 # Système
 .DS_Store
-.env

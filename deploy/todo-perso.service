@@ -1,0 +1,27 @@
+[Unit]
+Description=Gunicorn (todo_perso / notgmail.fr)
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=edmond
+Group=edmond
+WorkingDirectory=/home/edmond/todo_perso
+Environment=PATH=/home/edmond/todo_perso/.venv/bin:/usr/bin
+Environment=DJANGO_SETTINGS_MODULE=config.settings
+ExecStart=/home/edmond/todo_perso/.venv/bin/gunicorn \
+    --config /home/edmond/todo_perso/deploy/gunicorn.conf.py \
+    config.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+
+# Hardening (safe for a local Django app)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

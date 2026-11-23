@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Applique la conf Nginx + certificat Let's Encrypt (domaines DNS sains uniquement).
+# Usage : sudo bash /home/edmond/todo_perso/deploy/apply-nginx.sh
+set -euo pipefail
+
+APP_DIR="/home/edmond/todo_perso"
+CONF_SRC="${APP_DIR}/deploy/nginx/notgmail-app.conf"
+CONF_DST="/etc/nginx/sites-available/notgmail-app"
+SERVER_IP="$(curl -4 -s --max-time 5 ifconfig.me || true)"
+RESOLVERS=(1.1.1.1 8.8.8.8 9.9.9.9)
+
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "Lancer : sudo bash $0" >&2
+  exit 1
+fi
+
+# Toutes les IP A vues via plusieurs résolveurs (évite un cert si ancien A encore présent)
+dns_ips() {
+  local host="$1"
+  local ips=""
+  local r
+  for r in "${RESOLVERS[@]}"; do
+    ips+=" $(dig +short "$host" A @"$r" 2>/dev/null | grep -E '^[0-9.]+$' || true)"
+  done
+  # unique, sorted
+  echo "$ips" | tr ' ' '\n' | grep -E '^[0-9.]+$' | sort -u
+}
+
+domain_ok_for_cert() {
+  local host="$1"
+  local ips ip
+  ips="$(dns_ips "$host")"
+  if [[ -z "$ips" ]]; then
+    echo "  skip ${host} (pas d'enregistrement A)"
+    return 1
+  fi
+  # Refuse si une IP étrangère apparaît (ex. ancien serveur encore en dual-A)
+  while read -r ip; do
+    [[ -z "$ip" ]] && continue
+    if [[ "$ip" != "$SERVER_IP" ]]; then
+      echo "  skip ${host} — IP étrangère encore annoncée : ${ip} (serveur=${SERVER_IP})"
+      echo "         Supprime cet enregistrement A chez le registrar, attends la propagation,"
+      echo "         puis relance ce script (ou : certbot --nginx -d ${host} --expand)."
+      return 1
+    fi
+  done <<< "$ips"
+  echo "  + ${host} → ${SERVER_IP}"
+  return 0
+}
+
+echo "==> IP serveur : ${SERVER_IP:-inconnue}"
+echo "==> Install conf Nginx"
+install -m 644 "${CONF_SRC}" "${CONF_DST}"
+ln -sfn "${CONF_DST}" /etc/nginx/sites-enabled/notgmail-app
+rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/todo-perso
+mkdir -p /var/www/certbot/.well-known/acme-challenge
+chmod 755 /var/www/certbot
+# Test token ACME (webroot)
+echo ok > /var/www/certbot/.well-known/acme-challenge/ping
+chmod 755 /home/edmond /home/edmond/todo_perso /home/edmond/lettrage /home/edmond/storyboard
+chmod 755 /home/edmond/todo_perso/staticfiles /home/edmond/todo_perso/media 2>/dev/null || true
+
+nginx -t
+systemctl reload nginx
+
+echo "==> Test webroot ACME local"
+code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: todo.notgmail.fr" \
+  http://127.0.0.1/.well-known/acme-challenge/ping || true)
+echo "  GET /.well-known/acme-challenge/ping → HTTP ${code} (attendu 200)"
+
+echo "==> Domaines éligibles au certificat"
+DOMAINS=()
+for host in www.notgmail.fr todo.notgmail.fr notgmail.fr lettrage.notgmail.fr storyboard.notgmail.fr; do
+  if domain_ok_for_cert "$host"; then
+    DOMAINS+=(-d "$host")
+  fi
+done
+
+if [[ ${#DOMAINS[@]} -eq 0 ]]; then
+  echo "Aucun domaine éligible. Corrige le DNS puis relance."
+  exit 1
+fi
+
+echo "==> Certbot (uniquement domaines OK)"
+# Préférer webroot pour ne pas laisser certbot casser la conf nginx
+certbot certonly --webroot -w /var/www/certbot \
+  "${DOMAINS[@]}" \
+  --non-interactive --agree-tos \
+  --register-unsafely-without-email \
+  --cert-name notgmail \
+  --expand \
+  || certbot certonly --webroot -w /var/www/certbot \
+    "${DOMAINS[@]}" \
+    --non-interactive --agree-tos \
+    --register-unsafely-without-email \
+    --expand
+
+# Pointer la conf vers le bon live dir
+LIVE=""
+for candidate in notgmail www.notgmail.fr todo.notgmail.fr; do
+  if [[ -f "/etc/letsencrypt/live/${candidate}/fullchain.pem" ]]; then
+    LIVE="/etc/letsencrypt/live/${candidate}"
+    break
+  fi
+done
+if [[ -z "$LIVE" ]]; then
+  LIVE="$(find /etc/letsencrypt/live -mindepth 1 -maxdepth 1 -type d ! -name 'README*' | head -1 || true)"
+fi
+if [[ -n "$LIVE" ]]; then
+  echo "  Cert live : ${LIVE}"
+  sed -i "s|/etc/letsencrypt/live/www.notgmail.fr|${LIVE}|g" "${CONF_SRC}"
+  sed -i "s|/etc/letsencrypt/live/www.notgmail.fr|${LIVE}|g" "${CONF_DST}"
+  # aussi remplacer un éventuel chemin notgmail déjà présent
+  install -m 644 "${CONF_SRC}" "${CONF_DST}"
+fi
+
+nginx -t
+systemctl reload nginx
+
+echo
+echo "=== Tests ==="
+for host in www.notgmail.fr todo.notgmail.fr notgmail.fr lettrage.notgmail.fr storyboard.notgmail.fr; do
+  path="/login/"
+  [[ "$host" == "lettrage.notgmail.fr" || "$host" == "storyboard.notgmail.fr" ]] && path="/login"
+  code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${host}" "http://127.0.0.1${path}" || true)
+  echo "  http  ${host}${path} → ${code} (attendu 301)"
+  code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${host}" \
+    http://127.0.0.1/.well-known/acme-challenge/ping || true)
+  echo "  http  ${host}/.well-known/.../ping → ${code} (attendu 200)"
+done
+for host in www.notgmail.fr todo.notgmail.fr; do
+  code=$(curl -sk -o /dev/null -w "%{http_code}" --resolve "${host}:443:127.0.0.1" \
+    "https://${host}/login/" || true)
+  echo "  https ${host}/login/ → ${code} (attendu 200)"
+done
+code=$(curl -sk -o /dev/null -w "%{http_code}" --resolve "lettrage.notgmail.fr:443:127.0.0.1" \
+  "https://lettrage.notgmail.fr/login" || true)
+echo "  https lettrage.notgmail.fr/login → ${code} (attendu 200 si service lettrage actif)"
+code=$(curl -sk -o /dev/null -w "%{http_code}" --resolve "storyboard.notgmail.fr:443:127.0.0.1" \
+  "https://storyboard.notgmail.fr/login" || true)
+echo "  https storyboard.notgmail.fr/login → ${code} (attendu 200 si service storyboard actif)"
+
+echo
+echo "Si notgmail.fr (apex) a été skippé : supprime l'ancien A 51.178.x chez OVH,"
+echo "attends que dig +short notgmail.fr A ne renvoie PLUS que ${SERVER_IP}, puis :"
+echo "  sudo certbot certonly --webroot -w /var/www/certbot -d notgmail.fr -d www.notgmail.fr -d todo.notgmail.fr -d lettrage.notgmail.fr -d storyboard.notgmail.fr --cert-name notgmail --expand"
+echo "  sudo bash $0"
