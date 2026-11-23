@@ -25,7 +25,7 @@
                 style="--priority-color:{{ task.priority_color|default:'#555' }}"
                 title="Terminer la tâche">
         </button>
-        <input type="text" name="title" class="form-input form-input-title" value="{{ task.title }}" required>
+        <input type="text" name="title" class="form-input form-input-title" value="{{ task.title }}" maxlength="500" required>
         <button type="submit" form="taskEditForm" class="btn btn-primary btn-sm task-detail-save-top">Enregistrer</button>
       </div>
 

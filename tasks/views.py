@@ -464,8 +464,6 @@ def task_detail(request, task_id):
         'back_url': back_url,
         'task_export_data': {
             'id': task.pk,
-            'title': task.title,
-            'description': task.description,
             'images': [{'url': img.image.url, 'name': img.original_filename} for img in task.images.all()],
             'back_url': back_url,
             'project_url': f'/project/{task.project.pk}/',
@@ -525,6 +523,14 @@ def task_complete(request, task_id):
     task = get_object_or_404(Task, pk=task_id, user=request.user)
     if _is_stale_task_operation(request, task):
         return _stale_task_response()
+
+    if 'title' in request.POST:
+        title = request.POST['title'].strip()
+        if not title or len(title) > Task._meta.get_field('title').max_length:
+            return JsonResponse({'error': 'invalid title'}, status=400)
+        task.title = title
+    if 'description' in request.POST:
+        task.description = request.POST['description']
 
     old_section_id = task.section_id if task.parent_id is None else None
     op_dt = _operation_datetime(request)

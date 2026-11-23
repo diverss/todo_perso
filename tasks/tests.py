@@ -396,6 +396,68 @@ class TaskDetailInboxTests(TestCase):
         self.assertContains(response, f'<option value="{self.project.pk}">Projet</option>', html=True)
 
 
+class TaskExportCompletionTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_user('user-export')
+        self.inbox = Project.objects.create(user=self.user, name='A trier', is_inbox=True)
+        self.task = Task.objects.create(
+            user=self.user, title='Ancien titre', description='Ancienne description', project=self.inbox
+        )
+
+    def test_completion_saves_exported_text_and_completes_task(self):
+        request = with_user(self.factory.post(f'/task/{self.task.pk}/complete/', data={
+            'title': '  Nouveau titre  ',
+            'description': 'Nouvelle description\navec une autre ligne',
+        }), self.user)
+
+        response = task_complete(request, self.task.pk)
+
+        self.assertJSONEqual(response.content, {'status': 'ok'})
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.title, 'Nouveau titre')
+        self.assertEqual(self.task.description, 'Nouvelle description\navec une autre ligne')
+        self.assertTrue(self.task.completed)
+
+    def test_completion_without_text_keeps_existing_text(self):
+        request = with_user(self.factory.post(f'/task/{self.task.pk}/complete/'), self.user)
+
+        task_complete(request, self.task.pk)
+
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.title, 'Ancien titre')
+        self.assertEqual(self.task.description, 'Ancienne description')
+        self.assertTrue(self.task.completed)
+
+    def test_completion_can_clear_exported_description(self):
+        request = with_user(self.factory.post(f'/task/{self.task.pk}/complete/', data={
+            'title': 'Nouveau titre',
+            'description': '',
+        }), self.user)
+
+        task_complete(request, self.task.pk)
+
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.description, '')
+        self.assertTrue(self.task.completed)
+
+    def test_invalid_export_title_does_not_complete_or_change_task(self):
+        for title in ('   ', 'x' * 501):
+            with self.subTest(title=title[:20]):
+                request = with_user(self.factory.post(f'/task/{self.task.pk}/complete/', data={
+                    'title': title,
+                    'description': 'Nouvelle description',
+                }), self.user)
+
+                response = task_complete(request, self.task.pk)
+
+                self.assertEqual(response.status_code, 400)
+                self.task.refresh_from_db()
+                self.assertEqual(self.task.title, 'Ancien titre')
+                self.assertEqual(self.task.description, 'Ancienne description')
+                self.assertFalse(self.task.completed)
+
+
 class SearchViewTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()

@@ -1347,36 +1347,64 @@ async function pickObsidianFile() {
   }
 }
 
+let _obsPendingCompletion = null;
+
 async function confirmExportObsidian() {
   if (!_obsHandle) return;
+  const form = document.getElementById('taskEditForm');
+  if (!form.reportValidity()) return;
+  const title = form.elements.namedItem('title').value.trim();
+  if (!title) { showToast('Le titre est requis'); return; }
+  const description = form.elements.namedItem('description').value;
   const task = JSON.parse(document.getElementById('obsidian-task-data').textContent);
+  const handle = _obsHandle;
+  const exportBtn = document.getElementById('obsidianExportBtn');
+  exportBtn.disabled = true;
+  let completed = false;
+  let fileWritten = false;
 
-  const blockLines = [`#### ${task.title}`];
-  if (task.description.trim()) blockLines.push(task.description);
+  const blockLines = [`#### ${title}`];
+  if (description.trim()) blockLines.push(description);
   for (const img of task.images) blockLines.push(`![${img.name}](${location.origin}${img.url})`);
   const block = blockLines.join('\n');
+  const alreadyWritten = _obsPendingCompletion?.taskId === task.id
+    && _obsPendingCompletion.handle === handle
+    && _obsPendingCompletion.block === block;
+  fileWritten = alreadyWritten;
 
   try {
-    const perm = await _obsEnsureWritePermission(_obsHandle);
-    if (perm !== 'granted') { showToast('Permission refusée'); return; }
-    const file = await _obsHandle.getFile();
-    const lines = (await file.text()).split('\n');
-    lines.splice(0, 0, block);
-    const writable = await _obsHandle.createWritable();
-    await writable.write(lines.join('\n'));
-    await writable.close();
+    if (!alreadyWritten) {
+      const perm = await _obsEnsureWritePermission(handle);
+      if (perm !== 'granted') { showToast('Permission refusée'); return; }
+      const file = await handle.getFile();
+      const lines = (await file.text()).split('\n');
+      lines.splice(0, 0, block);
+      const writable = await handle.createWritable();
+      await writable.write(lines.join('\n'));
+      await writable.close();
+      fileWritten = true;
+      _obsPendingCompletion = { taskId: task.id, handle, block };
+    }
+
+    try { await _obsSaveHandle(handle); } catch (_) {}
+
+    const fd = new FormData();
+    fd.append('csrfmiddlewaretoken', getCsrf());
+    fd.append('title', title);
+    fd.append('description', description);
+    const res = await fetch(`/task/${task.id}/complete/`, { method: 'POST', body: fd });
+    const result = await res.json();
+    if (!res.ok || result.status !== 'ok') throw new Error(result.error || 'réponse inattendue');
+    completed = true;
+    _obsPendingCompletion = null;
+
+    closeModal('modalExportObsidian');
+    showToast('Exporté et tâche terminée ✓');
+    setTimeout(() => { location.href = task.back_url || task.project_url; }, 800);
   } catch (err) {
-    showToast('Erreur écriture : ' + err.message);
-    return;
+    const message = fileWritten ? 'Fichier exporté, mais tâche non terminée : ' : 'Erreur écriture : ';
+    showToast(message + err.message);
+  } finally {
+    if (!completed) exportBtn.disabled = false;
   }
-
-  try { await _obsSaveHandle(_obsHandle); } catch (_) {}
-
-  const fd = new FormData();
-  fd.append('csrfmiddlewaretoken', getCsrf());
-  await fetch(`/task/${task.id}/complete/`, { method: 'POST', body: fd });
-
-  closeModal('modalExportObsidian');
-  showToast('Exporté et tâche terminée ✓');
-  setTimeout(() => { location.href = task.back_url || task.project_url; }, 800);
 }
